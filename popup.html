@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!-- Don't! Paint it black — Author: Marcin Kleczek <marcin.kleczek@gmail.com> — MIT License -->
+<html>
+<head>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 300px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      background: #fdf6e3;
+      color: #586e75;
+    }
+    .header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .header img { width: 24px; height: 24px; }
+    .header h1 { font-size: 15px; font-weight: 700; color: #073642; line-height: 1.2; }
+    .header h1 span { color: #b58900; }
+
+    .status { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-bottom: 12px; }
+    .status.dark { background: #073642; color: #eee8d5; }
+    .status.light { background: #eee8d5; color: #93a1a1; }
+    .status.applied { background: #268bd2; color: #fdf6e3; }
+
+    /* Mode selector */
+    .modes { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .mode-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border: 2px solid #eee8d5; border-radius: 6px;
+      background: #fdf6e3; cursor: pointer; transition: all 0.1s;
+      text-align: left; font-size: 12px; color: #586e75;
+    }
+    .mode-btn:hover { border-color: #93a1a1; }
+    .mode-btn.selected { border-color: #268bd2; background: #eee8d5; }
+    .mode-btn .mode-name { font-weight: 600; font-size: 13px; }
+    .mode-btn .mode-desc { font-size: 11px; color: #93a1a1; margin-top: 1px; }
+    .mode-btn .badge { font-size: 9px; padding: 2px 6px; border-radius: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+    .badge-best { background: #859900; color: #fdf6e3; }
+    .badge-fast { background: #268bd2; color: #fdf6e3; }
+    .badge-precise { background: #6c71c4; color: #fdf6e3; }
+
+    /* Action button */
+    .btn {
+      display: block; width: 100%; padding: 10px; border: none; border-radius: 6px;
+      font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; letter-spacing: 0.3px;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn-apply { background: #b58900; color: #fdf6e3; }
+    .btn-remove { background: #dc322f; color: #fdf6e3; }
+
+    /* Validation */
+    .validation { margin-top: 12px; }
+    .validation h4 { font-size: 12px; color: #073642; margin-bottom: 6px; font-weight: 600; }
+    .val-summary { font-size: 12px; margin-bottom: 6px; }
+    .val-ok { color: #859900; font-weight: 600; }
+    .val-warn { color: #b58900; }
+    .val-crit { color: #dc322f; }
+    .val-list { max-height: 150px; overflow-y: auto; font-size: 11px; line-height: 1.4; }
+    .val-item { padding: 3px 0; border-bottom: 1px solid #eee8d5; }
+    .val-item:last-child { border-bottom: none; }
+    .val-ratio { font-weight: 600; }
+    .val-text { color: #93a1a1; font-style: italic; }
+    .val-colors { font-family: monospace; font-size: 10px; }
+
+    .info { margin-top: 10px; font-size: 11px; color: #93a1a1; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="icons/icon48.png" alt="">
+    <h1>Don't! <span>Paint it black</span></h1>
+  </div>
+
+  <div id="statusBadge" class="status light">Checking...</div>
+
+  <div id="modeSelector" class="modes" style="display:none">
+    <button id="modeNative" class="mode-btn" data-mode="native" style="display:none">
+      <div><div class="mode-name">Native Light</div><div class="mode-desc">Use site's own light theme</div></div>
+      <span class="badge badge-best">Best</span>
+    </button>
+    <button id="modeFilter" class="mode-btn" data-mode="filter">
+      <div><div class="mode-name">Quick Filter</div><div class="mode-desc">CSS inversion, instant</div></div>
+      <span class="badge badge-fast">Fast</span>
+    </button>
+    <button id="modeRemap" class="mode-btn" data-mode="remap">
+      <div><div class="mode-name">Precise Solarized</div><div class="mode-desc">Per-element remapping</div></div>
+      <span class="badge badge-precise">WCAG</span>
+    </button>
+  </div>
+
+  <button id="actionBtn" class="btn btn-apply" disabled>Let there be light!</button>
+
+  <div id="validation" class="validation" style="display:none">
+    <h4>Contrast Validation</h4>
+    <div id="valSummary" class="val-summary"></div>
+    <div id="valList" class="val-list"></div>
+  </div>
+
+  <div id="info" class="info"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

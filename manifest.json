@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Don't! Paint it black",
+  "version": "1.0.0",
+  "description": "Detects dark websites and converts them to a Solarized Light color scheme with WCAG AA contrast validation.",
+  "author": "Marcin Kleczek <marcin.kleczek@gmail.com>",
+  "homepage_url": "https://github.com/marcinkleczek/dont-paint-it-black",
+  "permissions": ["storage", "activeTab"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "dont-paint-it-black@solarize.me",
+      "strict_min_version": "109.0"
+    }
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}
