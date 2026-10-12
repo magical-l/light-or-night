@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>DPIB 缺陷复现测试页 · 目录</title>
+	<style>
+		*, *::before, *::after { box-sizing: border-box; }
+
+		body {
+			margin: 0;
+			background: #0d0d1a;
+			color: #e8e8f0;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+			line-height: 1.65;
+		}
+		.wrap { max-width: 1080px; margin: 0 auto; padding: 32px 22px 100px; }
+
+		h1 { font-size: 26px; margin: 0 0 6px; }
+		h2 { font-size: 18px; color: #a855f7; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #2a2a44; }
+		.sub { color: #9898b0; font-size: 13px; margin: 0 0 8px; }
+		p { margin: 8px 0; }
+		code {
+			font-family: "SF Mono", Consolas, monospace;
+			font-size: 12.5px;
+			padding: 1px 5px;
+			border-radius: 4px;
+			background: #1e1e36;
+			color: #b7c7ff;
+		}
+
+		.files { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+		.file-card {
+			background: #151528;
+			border: 1px solid #2a2a44;
+			border-radius: 10px;
+			padding: 16px 18px;
+		}
+		.file-card h3 { margin: 0 0 8px; font-size: 15px; }
+		.file-card h3 a { color: #7ee0a1; text-decoration: none; font-family: "SF Mono", Consolas, monospace; }
+		.file-card h3 a:hover { text-decoration: underline; }
+		.file-card p { font-size: 13px; color: #c6c6d6; margin: 6px 0 0; }
+		.file-card .tag { font-size: 11px; color: #9898b0; text-transform: uppercase; letter-spacing: 1px; }
+
+		table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+		th { text-align: left; padding: 9px 10px; background: #14142a; color: #a855f7; border-bottom: 2px solid #2a2a44; font-size: 12.5px; }
+		td { padding: 9px 10px; border-bottom: 1px solid #1e1e36; vertical-align: top; }
+		tr:hover td { background: #14142a; }
+		td code { white-space: nowrap; }
+		td.case-cell { white-space: nowrap; }
+		td.case-cell a { color: #7ee0a1; text-decoration: none; font-family: "SF Mono", Consolas, monospace; font-weight: 700; }
+		td.case-cell a:hover { text-decoration: underline; }
+		.expect-ok { color: #7ee0a1; }
+		.expect-fail { color: #f97316; }
+		.group-cell { color: #9898b0; font-weight: 700; white-space: nowrap; }
+		.group-cell.native { color: #60a5fa; }
+		.group-cell.detect { color: #fbbf24; }
+
+		.run {
+			background: #14142a;
+			border: 1px solid #2a2a44;
+			border-radius: 10px;
+			padding: 18px 22px;
+			margin-top: 12px;
+		}
+		.run ol { padding-left: 22px; margin: 8px 0 0; }
+		.run li { margin: 8px 0; font-size: 13.5px; }
+		.warn { color: #fbbf24; }
+
+		.legend { font-size: 12.5px; color: #9898b0; margin-top: 6px; }
+		a.plain { color: #7ee0a1; }
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<h1>DPIB 缺陷复现测试页</h1>
+		<p class="sub">这套页面用来复现 “Don't! Paint it black” 扩展的已知缺陷。纯静态、不联网、不引用外部资源（图片全部 data-URI 内联）。</p>
+
+		<h2>三个入口各自覆盖什么</h2>
+		<div class="files">
+			<div class="file-card">
+				<div class="tag">场景页 · 一个 case 一个文件</div>
+				<h3><a href="cases/">cases/</a></h3>
+				<p>11 个独立 case 页。每页默认把同一份场景并排渲染两次：左边是「原样」（内嵌 <code>&lt;iframe src="?raw=1"&gt;</code>，扩展不处理 iframe），右边是本页主体（会被扩展翻）。页面顶部有说明条（case 名 / 考什么 / 期望）与实时 DOM 状态行。</p>
+			</div>
+			<div class="file-card">
+				<div class="tag">故障拷问页 · 单页分区</div>
+				<h3><a href="torture.html">torture.html</a></h3>
+				<p>§1 反向滤镜的还原度、§2 高饱和大色块的 Remap、§3 滚动条 color-scheme、§4 性能（3000 元素 + 持续变动 + rAF 帧率）、§5~§7 渐变文字 / 深色伪元素 / 深色渐变背景。页尾有逐节预期清单。</p>
+			</div>
+			<div class="file-card">
+				<div class="tag">原作者的可视化难点页</div>
+				<h3><a href="test-edge-cases.html">test-edge-cases.html</a></h3>
+				<p>本目录下的 <code>test-edge-cases.html</code>，只覆盖 Remap 的可视化难点（渐变文字、伪元素、SVG、嵌套容器等），<b>不覆盖</b>本目录这套缺陷。两套互补。</p>
+			</div>
+		</div>
+
+		<h2>cases/ · 每个 case 一页：考什么、期望是什么、暴露的缺陷</h2>
+		<p class="legend">点 case 名打开该页。每页左侧 iframe 是不受扩展影响的「原样」，右侧是本页真实渲染（会被扩展处理）。要看「原样」单独一页，把地址改成 <code>?raw=1</code>。</p>
+		<table>
+			<thead>
+				<tr>
+					<th>case</th>
+					<th>页面初始状态</th>
+					<th>期望结果</th>
+					<th>暴露的缺陷</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td class="case-cell"><a href="cases/n-class.html">n-class</a></td>
+					<td><code>&lt;html class="dark"&gt;</code>，两套变量</td>
+					<td class="expect-ok">应成功：移除 dark 类 → 变浅</td>
+					<td class="group-cell native">Native · 对照组</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/n-datatheme.html">n-datatheme</a></td>
+					<td><code>data-theme="dark"</code>，有 dark/light 两套</td>
+					<td class="expect-ok">应成功：改成 "light" → 变浅</td>
+					<td class="group-cell native">Native · 对照组</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/n-nightvalue.html">n-nightvalue</a></td>
+					<td><code>data-theme="night"</code>，只有 night/day，无 light 规则</td>
+					<td class="expect-fail">应失败：硬写 "light" → 无规则匹配 → 破版白底</td>
+					<td class="group-cell native">Native · 硬写字符串 "light"</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/n-ls-odd.html">n-ls-odd</a></td>
+					<td>页内脚本只认 <code>localStorage.theme</code> 的 "night"/"day"</td>
+					<td class="expect-fail">应失败：值变 light 但脚本当非法 → 仍深色</td>
+					<td class="group-cell native">Native · 硬写字符串 "light"</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/n-prefers-only.html">n-prefers-only</a></td>
+					<td>深色只用 <code>@media (prefers-color-scheme: dark)</code>
+						<br><span class="legend">注意：本格深色来自 prefers-color-scheme，若系统/浏览器是浅色模式，本格本身就是浅色、缺陷看不见。需先在 DevTools 强制模拟深色：F12 → 右上角 ⋮ → More tools → Rendering → Emulate CSS media feature prefers-color-scheme → dark。</span></td>
+					<td class="expect-fail">无能为力：没有可切的东西，页面不变</td>
+					<td class="group-cell native">Native · 纯 media query 站点无解</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/n-nsclass.html">n-nsclass</a></td>
+					<td>命名空间类 <code>&lt;html class="nv-dark"&gt;</code>，本站同时定义 <code>.nv-dark</code>（深）与 <code>.nv-light</code>（浅）</td>
+					<td class="expect-ok">应成功：把 nv-dark 换成 nv-light → 变浅</td>
+					<td class="group-cell native">Native · 只认裸的 class "dark"（build.nvidia.com 形状）</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/n-useless.html">n-useless</a></td>
+					<td><code>&lt;html class="nv-dark"&gt;</code>，但 <code>.nv-dark</code> 与 <code>.nv-light</code> 效果相同（都是深色）</td>
+					<td class="expect-ok">应回滚：切 nv-light 没变浅 → 还原成 nv-dark</td>
+					<td class="group-cell native">Native · 切完不复测、失败不回滚</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/d-lightpage-darkmeta.html">d-lightpage-darkmeta</a></td>
+					<td>整页浅色，只有深色的 <code>meta[theme-color]</code></td>
+					<td class="expect-ok">不该判成深色页</td>
+					<td class="group-cell detect">判定 · 只看 theme-color 就下结论</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/d-htmldark-bodylight.html">d-htmldark-bodylight</a></td>
+					<td>html 深色兜底 #181818，body 浅色 #e7e7e7</td>
+					<td class="expect-ok">不该判成深色、不该翻转</td>
+					<td class="group-cell detect">判定 · 只看 html 背景就下结论</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/d-bodytransparent.html">d-bodytransparent</a></td>
+					<td>html 深色 #0d0d0d，body transparent</td>
+					<td class="expect-ok">应判成深色并正常翻浅（对照组）</td>
+					<td class="group-cell detect">判定 · 对照组</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/d-nonative-media.html">d-nonative-media</a></td>
+					<td>深色页无任何可切原生主题，含 img / video / canvas（均 200×150）</td>
+					<td class="expect-ok">只用原生不动；滤镜模式下 img/video/canvas 都要拿到反向滤镜</td>
+					<td class="group-cell detect">判定 · 无原生浅色页的滤镜与媒体反相</td>
+				</tr>
+			</tbody>
+		</table>
+		<p class="legend">「应成功 / 应判对」是扩展按设计应该做对的；「应失败」是这些页面故意要暴露的缺陷——如果它反而做对了，说明缺陷已被修复。</p>
+
+		<h2>翻转模式矩阵（设置项，非静态 case）</h2>
+		<p>扩展的「翻转模式」有 6 个取值：<code>off</code> / <code>只用原生</code> / <code>只用快速滤镜</code> / <code>只用精细 Solarized</code> / <code>原生优先→滤镜</code> / <code>原生优先→精细</code>。全局有一个默认值，单个站点可以覆盖它（还有一个「跟随全局」的选项）。</p>
+		<p class="legend">这些是<b>设置</b>不是页面，没法做成静态 case 页。下面这张表用于手动在 popup 里切换模式、对着各 case 页逐格验证。</p>
+		<table>
+			<thead>
+				<tr>
+					<th>模式</th>
+					<th>有原生浅色的页（如 <a class="plain" href="cases/n-nightvalue.html">n-nightvalue</a>）</th>
+					<th>无原生浅色的页（如 <a class="plain" href="cases/d-nonative-media.html">d-nonative-media</a>）</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td><code>off</code></td>
+					<td>不动</td>
+					<td>不动</td>
+				</tr>
+				<tr>
+					<td><code>只用原生</code></td>
+					<td>切原生</td>
+					<td>不动</td>
+				</tr>
+				<tr>
+					<td><code>只用快速滤镜</code></td>
+					<td>上滤镜</td>
+					<td>上滤镜</td>
+				</tr>
+				<tr>
+					<td><code>只用精细 Solarized</code></td>
+					<td>上重映射</td>
+					<td>上重映射</td>
+				</tr>
+				<tr>
+					<td><code>原生优先→滤镜</code></td>
+					<td>切原生</td>
+					<td>上滤镜</td>
+				</tr>
+				<tr>
+					<td><code>原生优先→精细</code></td>
+					<td>切原生</td>
+					<td>上重映射</td>
+				</tr>
+			</tbody>
+		</table>
+
+		<h2>怎么跑</h2>
+		<div class="run">
+			<ol>
+				<li><b>用 http(s) 打开</b>，不要直接双击（<code>file://</code>）。最省事的做法是在本目录起一个静态服务器：
+					<br><code>cd test &amp;&amp; python -m http.server 8000</code>
+					<br>然后访问 <code>http://localhost:8000/index.html</code>、<code>http://localhost:8000/cases/n-nightvalue.html</code>、<code>http://localhost:8000/torture.html</code>。
+				</li>
+				<li><b>或者</b>在扩展的详情页打开「允许访问文件网址 / Allow access to file URLs」，之后就能直接双击 <code>cases/</code> 里的页面打开。</li>
+				<li><span class="warn">为什么不能默认走 file://</span>：扩展对 <code>file://</code> 的访问默认是关闭的，content script 不会注入，页面里的缺陷也就复现不出来。同时 <code>n-ls-odd</code> 用 <code>localStorage</code> 保存主题，也需要一个正常的网页环境。</li>
+				<li><b>看 before / after</b>：每个 case 页默认左右并排——左边 <code>?raw=1</code> 的 iframe 是「原样」（扩展不处理 iframe），右边是本页主体、会被扩展翻。想看「原样」单独一页，把地址改成 <code>cases/&lt;case名&gt;.html?raw=1</code>（此时只有场景本体，没有说明条、没有 iframe）。</li>
+				<li><b>打开扩展</b>，对每个 case 按页面顶部「期望」那一行去验证。判定组的页面本身不会变，看的是扩展<b>是否误报/误翻</b>。</li>
+			</ol>
+		</div>
+	</div>
+</body>
+</html>

@@ -1,0 +1,97 @@
+# 开发笔记
+
+> 面向以后改这个扩展的人。只写**现状和依据**，不写"从 X 改成了 Y"。
+
+## 这个扩展做什么
+
+把页面翻成你偏好的明暗。**目前只实现了"翻浅"这一个方向**——「偏好深色」的镜像逻辑没做，字段也没留。
+
+核心概念只有一个：**「翻转模式」**。全局与本站共用同一套取值：
+
+| 值 | 含义 |
+|---|---|
+| `off` | 关闭 |
+| `native` | 只用站点自带的主题切换（零破坏） |
+| `filter` | 只用整页 CSS 滤镜 |
+| `remap` | 只用逐元素重映射 |
+| `native-filter` | 原生优先，失败用滤镜（**默认**） |
+| `native-remap` | 原生优先，失败用重映射 |
+
+`chrome.storage.sync` 里存 `{ globalMode, sites: { [host]: 模式 } }`；本站生效值 = `sites[host] ?? globalMode`。**键不存在 = 「跟随全局」**，不是一个单独的取值。`host` = `location.host`（含端口，不含路径）。
+
+## 关键设计（为什么是这样）
+
+**判定「深色页」看用户实际看到的底色。** 从 `body` 向上找第一个真画了背景的元素。不采信 `meta[theme-color]`——那是浏览器 UI 的配色，浅色页配深色品牌色很常见；也不因为 `html` 兜底是深色就下结论——`html` 深、`body` 浅的站点会被误判。判定为浅色就**什么都不做**，不管设置开得多足。
+
+**原生切换是「发现」出来的，不是写死的。** 扫站点全部样式表（含 `@media` 里嵌的），为每个深色值找**站点自己定义过**的对应物：
+
+- 类名走词形对应：`dark→light`、`night→day`、`dim→bright`、`black→white`（保大小写）
+- `data-*` 走「同一个属性定义过的其它非深色值」，属性名要像主题开关（`theme|mode|color|scheme|appearance`）
+
+**找不到对应物就宁可不动。** 写一个站点不认识的 `light` 会把它切进无样式状态。
+
+**切完必须复测。** 按 0/120/400/900ms 采样重测页面亮度，**只有真的变浅才算成功**，否则把 DOM 改回去。站点的浅色类可能根本没接到背景上，这种情况要能被识别出来并回滚。
+
+**`localStorage` 只作最后手段。** 它是唯一会**永久写进站点自己存储**的一档。只在 DOM 层一点可切的都没有时才走；写之前先记原值，下次加载时若页面仍未变浅就写回原值并标记本站失败；成功后记进 `lsUndo`，「撤销」会把它还回去。
+
+**滤镜必须是对合的。** 整页滤镜和图片的反向滤镜是**同一个值**，所以必须 `F(F(x)) = x`。`invert(100%) hue-rotate(180deg)` 满足——两者各自对合、且可交换；任何 `sepia/saturate/brightness` 都会破坏它。
+
+> 它**不是像素级精确**：中间结果超出色域时会被浏览器钳制，钳制不可逆，所以全饱和原色仍有偏差（实测纯蓝偏差 186）。灰阶偏差为 0——而灰阶是页面的大头，实测图像还原得和原图几乎一样。
+
+**iframe 是禁区。** `all_frames: true` 让每个 iframe 都跑一份 content script。所以：整页状态只在顶层维护（`init` 有守卫）、消息**也只由顶层应答**。否则 iframe 会把**它那边**的状态报给 popup（看起来像"扩展没生效"），点「撤销」还会把每个 iframe 都重载一遍。
+
+## 已知边界（未做）
+
+| 项 | 说明 |
+|---|---|
+| **`remap` 的调色板不好看** | 会把饱和的中间色直接换成 Solarized 强调色（深色按钮 → 艳蓝），和"刻意避开高饱和"的偏好冲突。方向已定：**保留 Solarized 底色**（暖米那套不刺眼），**强调色重做**，并把映射规则改成"保留原色相、提亮降饱和"。在此之前默认不推荐 `remap` |
+| **滤镜的 GPU 开销** | 整页 `filter` 会让浏览器走「先渲染到离屏再过滤」的通道，**页面里任何动画/过渡都会触发整页重新过滤**。实测 `build.nvidia.com`：关扩展约 45%、开滤镜约 70%（该页自身有 3 个 canvas、51 条 `animation` 规则、114 条 `transition` 规则） |
+| **MutationObserver** | 对 `body` 监听 `attributes + subtree + [class,style,src,srcset]`，且处理期间 `disconnect()`→`observe()`，那段时间站点的更新会丢。主要影响 `remap` |
+| **偏好深色方向** | 完全没做 |
+| **扩展名** | "Don't! Paint it black" 是上游的名字，只覆盖"翻浅"这件事 |
+
+## 许可证与上架
+
+MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICENSE`）。可以改、可以上架、可以闭源，**唯一义务是保留 `LICENSE` 并在 README / 商店说明里署名**。
+
+上架硬门槛（Chrome / Edge 都适用）：MV3 ✓ / 权限最小化 ✓ / 无远程代码 ✓ / 单用途 ✓ / **必须有实质改动**（不能原样重发别人的东西）✓。
+
+## 怎么验证
+
+扩展是**开发者模式加载解压目录**（Edge 里 `location: 4`，路径就是本目录）。改了 `content.js` / `popup.*` / `manifest.json` / `_locales` 之后**必须去 `edge://extensions` 重新加载**。
+
+`test/index.html` 是测试索引。每个 case 页（`test/cases/*.html`）的结构是：**左边 iframe 装"原样"、右边是被扩展处理的版本**——扩展有 `window !== window.top` 守卫、不处理 iframe，所以一屏就能对照。页内那行「加载时 / 现在」是 DOM 状态的 before/after（快照存 `sessionStorage`，reload 也保得住）。
+
+**验证手段的两个坑：**
+
+1. **别拿无头浏览器的截图当"用户看到的样子"。** 无头实例没有登录态，站点会给完全不同的页面（`meshy.ai` 未登录看到的是亮黄绿的营销页，登录后才是有黑框的应用页）。要么用真实浏览器，要么明确标注这是未登录视图。
+2. **优先驱动真实浏览器**（Kimi WebBridge，daemon `http://127.0.0.1:10086`）。Windows 下**请求体必须写成文件**再发，中文经 shell 会被破坏：
+
+   ```bash
+   curl.exe -s -X POST http://127.0.0.1:10086/command \
+     -H "Content-Type: application/json" --data-binary "@C:/path/to/req.json"
+   ```
+
+**验证用的真实站点：**
+
+- `build.nvidia.com` —— 黑底 `#0c0c0c`，**没有原生浅色主题**（body 底色写死在 `var(--color-manitoulinDarkBlack)`，页面上也没有主题开关），所以只能走滤镜兜底
+- `www.meshy.ai` —— `html` 深、`body` 浅、`main` 更浅，是判定逻辑的回归样本
+- `chat.deepseek.com`、`e2b.dev`、`program.pinokio.computer`、`serper.dev`、`xiutaku.com`
+
+## 决策日志
+
+### 2026-10（2.0.0）
+
+**设置模型从「三模式 + 自动开关」改成「一个翻转模式」。** 原来是「全局开关 + 本站开关 + 手动三选一模式」，语义重叠——那三个模式按钮既不是设置也不是动作，分不清"这套是针对全局还是针对本站的"。现在全局和本站共用同一套取值，本站只多一个「跟随全局」；「关闭」成为取值之一，不再是单独的开关。
+
+**本站用「默认值 + 显式覆盖」，不用「一个列表两种语义」。** 后者会让用户手动设过的站在全局开关翻转时跟着翻，把用户做过的决定冲掉。
+
+**滤镜换成对合表达式。** 见上文「滤镜必须是对合的」。改之前 `F(F(x)) ≠ x`，图片被压对比度 + 泛黄。
+
+**popup 全量 i18n**（`en` / `zh_CN`，`default_locale: en`）。品牌名 `<h1>` 不本地化。
+
+**测试套件拆成 `test/cases/*`。** 原来多个 case 的 CSS 全挤在一个文件里，扩展扫样式表时会被**别的 case 的规则污染**——开发中真的踩到过：一个 case 的 `resolveLightValue` 扫到了另一个 case 的 `[data-theme="light"]`。
+
+**删掉 `color-scheme-meta` 信号。** 它「扫到任意样式表里有 `@media (prefers-color-scheme)` 就算站点可切」，动作是插一个 `<meta name="color-scheme" content="light">`——实测无效，`color-scheme` 影响不了那个媒体查询。而 `@media (prefers-color-scheme: dark)` 块太常见，等于把几乎所有站都判成"有原生可切"，会谎报成功、还会顶掉真实可用的滤镜兜底。
+
+**`color-scheme: light` 是唯一能让滚动条跟着变浅的办法**（inline + `!important`），但它**不能**让站点自己的 `@media (prefers-color-scheme: dark)` 失配——实测过，那种站点没有可切的东西。

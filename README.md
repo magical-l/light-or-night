@@ -2,35 +2,45 @@
 
 ## Short description (max 132 characters)
 
-Tired of dark websites burning your retinas at 2 PM? This extension gently persuades them to embrace the light side.
+Dark pages converted to light automatically. Uses the site's own light theme when there is one; a CSS filter when there isn't.
 
 ## Long description
 
-Some websites just love the dark side. We get it — it looks cool. But your eyes at 2 PM on a Tuesday? They respectfully disagree.
+Some websites just love the dark side. Your eyes at 2 PM on a Tuesday respectfully disagree.
 
-**Don't! Paint it black** detects dark-themed websites and offers three ways to bring them into the light:
+**Don't! Paint it black** turns dark pages light — **by itself**, the moment a page loads. No clicking through a menu on every site.
 
-**Native Light** — If the site already has a light theme hiding behind a CSS class, we'll find it and flip the switch. No hacks, no tricks — just the site's own light mode, activated for you. Works beautifully on GitHub, Tailwind-powered sites, and hundreds more.
+**It tries the polite way first.** If a site ships its own light theme, we find the switch that site itself uses and flip it. Nothing is repainted, nothing is inverted — it is the site's own light mode. That covers Tailwind-style `dark` classes, `data-theme` and `data-bs-theme` attributes, GitHub-style `data-color-mode`, namespaced class names, and anything else whose light counterpart can be found in the page's own stylesheets.
 
-**Quick Filter** — For stubborn sites with hardcoded dark themes (we see you, startup landing pages), a one-line CSS filter instantly inverts the page to warm, creamy tones. Hover effects, animations, gradients — all preserved. Smart image detection ensures your cat photos stay normal while dark screenshots get properly lightened.
+**If a site has no light theme, a filter takes over.** A full-page filter brings the page back to light, with an exactly-inverse counter-filter applied to images, video and canvas — so your photos stay untouched. Toggling the filter off and on again returns every pixel to where it started.
 
-**Precise Solarized** — The perfectionist's choice. Every element individually remapped to the Solarized Light palette, with WCAG AA contrast validation built right into the popup. Because accessibility isn't optional.
+**Verified, not assumed.** After switching, the extension re-measures the page and **rolls back** if nothing actually got lighter — a site is never left half-converted.
+
+**Every site is yours to set.** One global default, plus a per-site override with six modes:
+
+- Off
+- Native only
+- Quick filter only
+- Precise Solarized only
+- Native first, else quick filter *(default)*
+- Native first, else Precise Solarized
 
 **Features:**
-• Automatic dark page detection — we scan, you decide
-• Three modes for different situations, always your choice
-• Smart image analysis — samples edge pixels to avoid inverting your vacation photos
-• Handles gradient text, SVG icons, background images, lazy-loaded content
-• WCAG AA contrast checker built into the extension popup
-• Works on Chrome and Firefox
-• 16KB total. No tracking. No accounts. No nonsense.
+
+- Automatic — dark pages are converted as soon as they load
+- Native-first — prefers the site's own light theme, so nothing is destroyed
+- Rolls back when a switch turns out to do nothing
+- Per-site exceptions, one click
+- One-tap undo — restores the page and stops converting that site
+- English and Chinese UI, following your browser language
+- No tracking. No accounts. No remote code.
 
 **How it works:**
-1. Visit any dark website
-2. Click the sun icon — it tells you if the page is dark
-3. Pick a mode (we'll recommend the best one)
-4. Enjoy your newly illuminated internet
+
+1. Install it. It is on by default for every site.
+2. Visit a dark website — it is already light.
+3. Want a site left alone? Open the popup and set that site to *Off*.
 
 Named after the Rolling Stones classic, because some things just shouldn't be painted black.
 
-Made by Marcin Kleczek (marcin.kleczek@gmail.com). MIT License.
+Made by Marcin Kleczek (marcin.kleczek@gmail.com). MIT License. 28 KB packaged.

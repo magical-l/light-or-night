@@ -1,0 +1,50 @@
+{
+  "checking": { "message": "Checking..." },
+  "cannotAccessPage": { "message": "Cannot access page" },
+  "cannotRunHere": { "message": "Can't run on this page (chrome://, extensions, etc.)" },
+  "darkPageDetected": { "message": "Dark page detected" },
+  "lightPage": { "message": "Light page" },
+  "lightPageHint": { "message": "Page doesn't appear dark, but you can force it" },
+  "appliedMethod": {
+    "message": "Applied: $method$",
+    "placeholders": { "method": { "content": "$1" } }
+  },
+  "flipModeTitle": { "message": "Flip mode" },
+  "siteModeTitle": { "message": "This site" },
+  "change": { "message": "Change" },
+  "collapse": { "message": "Collapse" },
+  "modeOff": { "message": "Off" },
+  "modeNativeOnly": { "message": "Native only" },
+  "modeFilterOnly": { "message": "Quick filter only" },
+  "modeRemapOnly": { "message": "Precise Solarized only" },
+  "modeNativeFilter": { "message": "Native first, else quick filter" },
+  "modeNativeRemap": { "message": "Native first, else Precise Solarized" },
+  "followGlobal": { "message": "Follow global" },
+  "siteFollowCurrent": {
+    "message": "Follow global · Current: $mode$",
+    "placeholders": { "mode": { "content": "$1" } }
+  },
+  "actionRemoveSite": { "message": "Undo, and stop flipping this site" },
+  "modeNativeName": { "message": "Native Light" },
+  "modeFilterName": { "message": "Quick Filter" },
+  "modeRemapName": { "message": "Precise Solarized" },
+  "validationTitle": { "message": "Contrast Validation" },
+  "scanning": { "message": "Scanning..." },
+  "validationFailed": { "message": "Validation failed" },
+  "allPass": {
+    "message": "All $count$ elements pass WCAG AA",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "passCount": {
+    "message": "$passed$/$checked$ pass",
+    "placeholders": { "passed": { "content": "$1" }, "checked": { "content": "$2" } }
+  },
+  "criticalCount": {
+    "message": "$count$ critical (&lt;3:1)",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "warningCount": {
+    "message": "$count$ warning (&lt;4.5:1)",
+    "placeholders": { "count": { "content": "$1" } }
+  }
+}

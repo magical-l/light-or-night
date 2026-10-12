@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>DPIB 缺陷复现</title>
+	<script>
+		/* 本页只对应一个 case。 */
+		var DPIB_CASE = 'n-ls-odd';
+
+		/* 尽早执行（先于扩展 content script 的 document_idle）：设置本 case 的页面级初始状态。
+		   raw 模式（iframe 里）与默认模式都跑同一段，保证 iframe 内外状态/渲染完全一致。
+		   本 case 就是靠 localStorage.theme 决定主题，所以不清这个键。 */
+		(function () {
+			var html = document.documentElement;
+
+			try { if (localStorage.getItem('theme') === null) localStorage.setItem('theme', 'night'); } catch (e) {}
+			var t;
+			try { t = localStorage.getItem('theme'); } catch (e) { t = null; }
+			var eff = (t === 'day') ? 'day' : 'night';   /* 非法值一律当 night */
+			html.classList.add('ls-' + eff);
+		})();
+	</script>
+	<style>
+		*, *::before, *::after { box-sizing: border-box; }
+
+		html {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+			background: var(--page-bg, var(--bg, #ffffff));
+		}
+		body {
+			margin: 0;
+			padding: 0 0 80px;
+			min-height: 100vh;
+			line-height: 1.65;
+			background: var(--page-bg, var(--bg, #ffffff));
+			color: var(--page-fg, var(--fg, #000000));
+		}
+		.wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
+		h1 { font-size: 22px; margin: 0 0 8px; }
+		h2 { font-size: 17px; margin: 28px 0 10px; }
+		.card {
+			background: var(--card-bg, #ffffff);
+			color: var(--card-fg, inherit);
+			border: 1px solid var(--card-bd, #ddd);
+			border-radius: 10px;
+			padding: 18px 20px;
+			margin: 14px 0;
+		}
+		.card p { margin: 0 0 10px; }
+		.card p:last-child { margin-bottom: 0; }
+		.card code {
+			font-family: "SF Mono", Consolas, monospace;
+			font-size: 12.5px;
+			padding: 1px 5px;
+			border-radius: 4px;
+			background: rgba(127,127,127,.18);
+		}
+		.demo {
+			border: 2px dashed rgba(127,127,127,.5);
+			border-radius: 8px;
+			padding: 14px 16px;
+			margin-top: 6px;
+		}
+		.legend { font-size: 12px; opacity: .75; margin-top: 4px; }
+
+		/* ============ 本 case 的主题 CSS（取自原场景页里该 case 的主题分区，已去掉选择器前缀） ============ */
+		html                              { --page-bg: #fdf6e3; --page-fg: #3f3f3f; --card-bg: #ffffff; --card-fg: #3f3f3f; --card-bd: #ddd5bd; }
+		html.ls-night                     { --page-bg: #0a0a1a; --page-fg: #e8e8f0; --card-bg: #1b1b34; --card-fg: #e8e8f0; --card-bd: #2a2a44; }
+		html.ls-day                       { --page-bg: #fdf6e3; --page-fg: #3f3f3f; --card-bg: #ffffff; --card-fg: #3f3f3f; --card-bd: #ddd5bd; }
+
+		/* ============ 外壳：说明条 / 状态行 / 双栏（始终可读，不参与站点配色）。
+		     两种模式都加载；raw 模式下没有对应元素，等于无副作用。 ============ */
+		.banner {
+			padding: 20px 24px 22px;
+			background: #1f6feb;
+			color: #fff;
+			border-bottom: 6px solid #0b2a5e;
+		}
+		.banner-group { font-size: 13px; text-transform: uppercase; letter-spacing: 2px; opacity: .85; }
+		.banner-case {
+			font-size: 40px;
+			font-weight: 800;
+			letter-spacing: -.5px;
+			font-family: "SF Mono", Consolas, monospace;
+			word-break: break-all;
+			line-height: 1.1;
+		}
+		.banner-what { font-size: 16px; margin-top: 12px; max-width: 1100px; }
+		.banner-expect {
+			font-size: 15px;
+			margin-top: 8px;
+			padding: 8px 12px;
+			background: rgba(0,0,0,.22);
+			border-radius: 8px;
+			max-width: 1100px;
+		}
+		.banner-hint {
+			font-size: 13.5px;
+			margin-top: 10px;
+			padding: 7px 11px;
+			background: #fde68a;
+			color: #713f12;
+			border-radius: 6px;
+			display: inline-block;
+			font-weight: 700;
+		}
+		.state {
+			font-family: "SF Mono", Consolas, monospace;
+			font-size: 13px;
+			padding: 9px 24px;
+			background: #0c0e15;
+			color: #8ee6b0;
+			border-bottom: 1px solid #2a2f45;
+			word-break: break-all;
+		}
+		.state b { color: #d7e2ff; }
+		.state-row + .state-row { margin-top: 3px; }
+		.state-row.is-changed { color: #ffd479; }
+		.state-row.is-changed b { color: #ffd479; }
+		.state-flag { font-weight: 700; }
+		.state-reset {
+			margin-top: 7px;
+			font-family: inherit;
+			font-size: 11.5px;
+			color: #9fb0c8;
+			background: transparent;
+			border: 1px solid #2a2f45;
+			border-radius: 5px;
+			padding: 2px 9px;
+			cursor: pointer;
+		}
+		.state-reset:hover { color: #d7e2ff; border-color: #3b4360; }
+
+		.heads { display: flex; gap: 16px; padding: 10px 16px 0; }
+		.head { flex: 1 1 0; min-width: 0; font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #6b7280; }
+		.panes { display: flex; gap: 16px; padding: 6px 16px 24px; align-items: stretch; min-height: 70vh; }
+		.pane { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+		.pane-body { flex: 1 1 auto; min-height: 0; }
+		.pane-frame {
+			display: block;
+			width: 100%;
+			height: 100%;
+			border: 0;
+			outline: 2px solid #6b7280;
+			outline-offset: -2px;
+			background: #fff;
+		}
+		/* 安全网：滤镜模式下扩展给顶层 html 套 invert+hue-rotate，该滤镜视觉上会一并
+		   作用于其后代 iframe，导致「原样」框也被反相；滤镜自逆，给 iframe 再套一份抵消。 */
+		html.dpib-filtered .pane-frame { filter: invert(100%) hue-rotate(180deg) !important; }
+	</style>
+</head>
+<body>
+	<template id="dpib-chrome">
+		<div class="banner">
+			<div class="banner-group">Native 组 · 考「扩展硬写字符串 "light"」【核心】</div>
+			<div class="banner-case"></div>
+			<div class="banner-what"><b>这个 case 在考什么：</b>html 上没有 class/attr。页内脚本读 localStorage.theme，只认 "night"（深）与 "day"（浅），其它值一律当 night。扩展会把 localStorage.theme 硬写成 "light" 然后 reload。</div>
+			<div class="banner-expect"><b>期望：</b>应该失败：顶部状态行会显示 localStorage.theme = light，但脚本视其为非法值 → 页面仍然是深色。值变了、页面没变，这就是缺陷。</div>
+			<div class="banner-hint">这一页会被扩展自动处理；左边那个框（原样）是不受扩展影响的原始状态。</div>
+		</div>
+		<div class="state">
+			<div id="dpib-state"></div>
+			<button type="button" class="state-reset" id="dpib-reset">重设快照</button>
+		</div>
+		<div class="heads">
+			<div class="head">原样 —— 扩展不处理这一栏</div>
+			<div class="head">扩展处理后 —— 就是扩展实际做的效果</div>
+		</div>
+		<div class="panes">
+			<div class="pane">
+				<div class="pane-body">
+					<iframe class="pane-frame" src="?raw=1" title="本 case 的原始状态（?raw=1）。扩展不处理 iframe，这里就是真正的「原样」。"></iframe>
+				</div>
+			</div>
+			<div class="pane">
+				<div class="pane-body">
+					<div class="wrap" id="dpib-scene"></div>
+				</div>
+			</div>
+		</div>
+	</template>
+
+	<script>
+		(function () {
+			var raw = new URLSearchParams(location.search).get('raw') === '1';
+
+			/* 场景本体：该 case 的场景内容原文。 */
+			var SCENE = '<div class="card">' +
+				'<p><b>现状：</b>html 上没有任何 class/attr。页内脚本读 <code>localStorage.theme</code>，只认 <code>"night"</code>（深）与 <code>"day"</code>（浅），其它值一律当 night。</p>' +
+				'<p><b>扩展会怎么做：</b>把 <code>localStorage.theme</code> 硬写成 <code>"light"</code>，然后触发 reload。</p>' +
+				'<p><b>观察：</b>顶部状态行会显示 <code>localStorage.theme = light</code>，但脚本视其为非法 → 页面仍是深色。<b>值变了、页面没变</b>。</p>' +
+				'</div>';
+
+			document.title = DPIB_CASE + ' · DPIB 缺陷复现';
+
+			/* raw 模式：只渲染场景本身，不带说明条、不带 iframe。 */
+			if (raw) {
+				document.body.insertAdjacentHTML('beforeend', '<div class="wrap">' + SCENE + '</div>');
+				return;
+			}
+
+			/* 默认模式：说明条 + 左右并排（左 iframe 原样 / 右 本页场景）。 */
+			document.body.appendChild(document.getElementById('dpib-chrome').content.cloneNode(true));
+			document.querySelector('.banner-case').textContent = DPIB_CASE;
+			document.getElementById('dpib-scene').innerHTML = SCENE;
+
+			var SNAP_KEY = 'dpib-snapshot:' + DPIB_CASE;
+
+			function readState() {
+				var h = document.documentElement;
+				var ls = null;
+				try { ls = localStorage.getItem('theme'); } catch (e) { ls = '(不可读)'; }
+				return { cls: h.className || '(无)', theme: h.getAttribute('data-theme'), ls: ls };
+			}
+			function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+			/* 加载时快照：优先用 sessionStorage 里存活的旧快照（跨 reload 保留），没有才采集当前并写入。
+			   n-ls-odd 靠 localStorage + reload 生效，快照若不持久化，reload 后「加载时」会被新状态覆盖。 */
+			var snapshot = (function () {
+				try {
+					var saved = sessionStorage.getItem(SNAP_KEY);
+					if (saved) return JSON.parse(saved);
+				} catch (e) {}
+				var s = readState();
+				try { sessionStorage.setItem(SNAP_KEY, JSON.stringify(s)); } catch (e) {}
+				return s;
+			})();
+
+			function sameState(a, b) {
+				return a.cls === b.cls && a.theme === b.theme && a.ls === b.ls;
+			}
+			function stateLine(label, s, changed) {
+				return '<div class="state-row' + (changed ? ' is-changed' : '') + '">' +
+					'<b>' + label + '</b> html.class = ' + esc(s.cls) +
+					' ｜ html[data-theme] = ' + esc(s.theme === null ? '(无)' : s.theme) +
+					' ｜ localStorage.theme = ' + esc(s.ls === null ? '(无)' : s.ls) +
+					(changed ? ' <span class="state-flag">· 已变化</span>' : '') +
+					'</div>';
+			}
+			function renderState() {
+				var now = readState();
+				document.getElementById('dpib-state').innerHTML =
+					stateLine('加载时：', snapshot, false) +
+					stateLine('现在：', now, !sameState(snapshot, now));
+			}
+			renderState();
+
+			/* 重设快照：清掉 sessionStorage 里这条快照并 reload，重新采集当刻状态。 */
+			document.getElementById('dpib-reset').addEventListener('click', function () {
+				try { sessionStorage.removeItem(SNAP_KEY); } catch (e) {}
+				location.reload();
+			});
+
+			/* 滤镜安全网：顶层 html 一旦被扩展套上滤镜，就给 iframe 补一份反向滤镜。 */
+			function syncFilterGuard() {
+				var f = getComputedStyle(document.documentElement).filter;
+				document.documentElement.classList.toggle('dpib-filtered', !!f && f !== 'none');
+			}
+			/* 状态行与滤镜安全网按同一 tick 持续更新，跟上扩展的真实动作。 */
+			function tick() { renderState(); syncFilterGuard(); }
+			tick();
+			setInterval(tick, 250);
+		})();
+	</script>
+</body>
+</html>

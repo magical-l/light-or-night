@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>DPIB 缺陷复现 · torture</title>
+	<style>
+		/* §3：显式声明 color-scheme，考扩展是否处理 color-scheme */
+		html { color-scheme: dark; }
+
+		*, *::before, *::after { box-sizing: border-box; }
+
+		html { background: #0d0d1a; }
+
+		body {
+			margin: 0;
+			padding: 0 0 120px;
+			background: #0d0d1a;
+			color: #e8e8f0;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+			line-height: 1.6;
+		}
+
+		.wrap { max-width: 1000px; margin: 0 auto; padding: 28px 22px; }
+
+		h1 { font-size: 26px; margin: 0 0 6px; }
+		.sub { color: #9898b0; font-size: 13px; margin: 0 0 24px; }
+		h2 {
+			font-size: 17px;
+			color: #a855f7;
+			margin: 40px 0 12px;
+			padding-bottom: 8px;
+			border-bottom: 1px solid #2a2a44;
+		}
+		h2 .dim { color: #9898b0; font-weight: 400; font-size: 13px; }
+		p { margin: 8px 0; }
+		.note { color: #9898b0; font-size: 12.5px; }
+
+		/* ============ §1 图片（对照写法已废弃，改为图下「原本长什么样」+ 数值化往返测试） ============ */
+		.pairs { display: flex; flex-wrap: wrap; gap: 22px; }
+		.pair { background: #151528; border: 1px solid #2a2a44; border-radius: 10px; padding: 14px; }
+		figure { margin: 0; }
+		figure figcaption { font-size: 11.5px; color: #9898b0; margin-top: 6px; text-align: center; }
+		.shot { width: 240px; height: 160px; display: block; border: 1px solid #333a55; }
+
+		.icon-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+		.icon-row img { width: 32px; height: 32px; border: 1px solid #333a55; }
+
+		/* ============ §1 数值化往返测试 ============ */
+		.rt-h { font-size: 15px; color: #c084fc; margin: 30px 0 10px; border: none; padding: 0; }
+		.rt-h .dim { color: #9898b0; font-weight: 400; font-size: 12.5px; }
+		.rt-scroll { overflow-x: auto; margin-top: 10px; }
+		.rt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+		.rt-table th {
+			text-align: left;
+			padding: 8px 10px;
+			background: #14142a;
+			color: #a855f7;
+			border-bottom: 2px solid #2a2a44;
+			white-space: nowrap;
+		}
+		.rt-table td { padding: 8px 10px; border-bottom: 1px solid #1e1e36; }
+		.rt-table tr:hover td { background: #14142a; }
+		.rt-table code { font-family: "SF Mono", Consolas, monospace; color: #b7c7ff; }
+		.rt-mono { font-family: "SF Mono", Consolas, monospace; }
+		.rt-swatch {
+			display: inline-block;
+			width: 22px;
+			height: 22px;
+			border: 1px solid #333a55;
+			vertical-align: middle;
+			margin-right: 7px;
+		}
+		.rt-dev { color: #f97316; }
+		.rt-ok { color: #22c55e; font-weight: 700; }
+		.rt-bad { color: #ef4444; font-weight: 700; }
+		.rt-unsupported { color: #fbbf24; font-weight: 700; }
+		.rt-warn-box {
+			margin-top: 10px;
+			background: #3b1d1d;
+			border: 1px solid #ef4444;
+			color: #fecaca;
+			border-radius: 8px;
+			padding: 10px 14px;
+			font-size: 13px;
+		}
+
+		/* ============ §2 高饱和大色块 ============ */
+		.blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+		.block-cell { }
+		.block { width: 100%; min-height: 120px; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+		.block .l-white { color: #ffffff; font-size: 18px; font-weight: 700; }
+		.block .l-black { color: #000000; font-size: 18px; font-weight: 700; }
+		.hex { font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: #9898b0; margin-top: 6px; }
+
+		/* ============ §4 性能 ============ */
+		#perf-go {
+			font-size: 14px;
+			font-weight: 700;
+			padding: 10px 18px;
+			border-radius: 8px;
+			border: none;
+			background: #a855f7;
+			color: #fff;
+			cursor: pointer;
+		}
+		#perf-go:hover { background: #9333ea; }
+		#perf-go:disabled { opacity: .5; cursor: default; }
+		#perf-fps-line { margin: 12px 0 6px; font-size: 14px; }
+		#perf-fps { font-weight: 800; color: #22c55e; font-size: 20px; }
+		#perf-stat { font-family: "SF Mono", Consolas, monospace; font-size: 13px; color: #f97316; }
+		#perf-log {
+			margin: 10px 0 0;
+			height: 120px;
+			overflow: auto;
+			background: #0d0d22;
+			border: 1px solid #2a2a44;
+			border-radius: 8px;
+			padding: 10px;
+			font-size: 12px;
+			color: #9898b0;
+			white-space: pre;
+		}
+		.perf-box {
+			margin-top: 10px;
+			border: 1px dashed #2a2a44;
+			border-radius: 8px;
+			padding: 4px;
+			min-height: 40px;
+			max-height: 260px;
+			overflow: auto;
+			line-height: 0;
+		}
+		.perf-item {
+			display: inline-block;
+			width: 14px;
+			height: 14px;
+			margin: 1px;
+			font-size: 8px;
+			color: #fff;
+			overflow: hidden;
+			vertical-align: top;
+			text-align: center;
+		}
+		.perf-item.on { opacity: .35; outline: 1px solid #fff; }
+
+		/* ============ §5 渐变文字 ============ */
+		.gradient-text {
+			font-size: 36px;
+			font-weight: 800;
+			background: linear-gradient(135deg, #a855f7, #22c55e);
+			-webkit-background-clip: text;
+			background-clip: text;
+			-webkit-text-fill-color: transparent;
+		}
+		.gradient-text-blue {
+			font-size: 24px;
+			font-weight: 700;
+			background: linear-gradient(90deg, #3b82f6, #06b6d4);
+			-webkit-background-clip: text;
+			background-clip: text;
+			-webkit-text-fill-color: transparent;
+		}
+
+		/* ============ §6 深色伪元素 ============ */
+		.pseudo-test { position: relative; padding-left: 26px; }
+		.pseudo-test::before {
+			content: "";
+			position: absolute;
+			left: 0; top: 4px;
+			width: 12px; height: 12px;
+			background: #12122a;
+			border: 2px solid #a855f7;
+			border-radius: 50%;
+		}
+		.pseudo-overlay {
+			position: relative;
+			padding: 20px;
+			background: #1e1e36;
+			border-radius: 8px;
+		}
+		.pseudo-overlay::after {
+			content: "Overlay via ::after（深色 rgba 叠加）";
+			position: absolute;
+			bottom: 0; left: 0; right: 0;
+			padding: 8px;
+			background: rgba(0, 0, 0, 0.7);
+			color: #fff;
+			font-size: 12px;
+			text-align: center;
+			border-radius: 0 0 8px 8px;
+		}
+
+		/* ============ §7 深色渐变背景 ============ */
+		.gradient-bg {
+			background: linear-gradient(135deg, #1e1e36, #2a1a4a);
+			padding: 24px;
+			border-radius: 8px;
+			color: #e8e8f0;
+		}
+		.gradient-bg-colorful {
+			background: linear-gradient(135deg, #7c3aed, #2563eb);
+			padding: 24px;
+			border-radius: 8px;
+			color: #fff;
+		}
+
+		/* ============ 清单 ============ */
+		.checklist {
+			background: #14142a;
+			border: 1px solid #2a2a44;
+			border-radius: 10px;
+			padding: 20px 24px;
+			margin-top: 48px;
+		}
+		.checklist h2 { border: none; margin-top: 0; color: #22c55e; }
+		.checklist ul { padding-left: 20px; }
+		.checklist li { margin: 10px 0; font-size: 13.5px; }
+		.checklist b { color: #7ee0a1; }
+		.checklist .bad { color: #f97316; }
+
+		/* 撑高页面，保证出现滚动条（§3） */
+		.tall-filler { height: 130vh; }
+		.tall-filler .mark { color: #3a3a5a; font-size: 12px; padding-top: 20px; }
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<h1>DPIB 缺陷复现 · torture</h1>
+		<p class="sub">单个页面，分区复现可视化缺陷。深色底 #0d0d1a。每节标题写明「在考什么」，页尾有对照清单。</p>
+
+		<!-- ===================== §1 ===================== -->
+		<h2>§1 反向滤镜的还原度 <span class="dim">— 考 Filter 模式的反向滤镜能否精确抵消</span></h2>
+		<p class="note">扩展给整页加了一层滤镜，再给图片（<code>&lt;img&gt;</code> / <code>canvas</code> / <code>picture</code>）套上<b>同一个</b>滤镜，想把自己加的那层抵消掉。反向滤镜与整页滤镜是<b>同一个</b>值，所以它必须对合：<code>invert(100%)</code> 与 <code>hue-rotate(180deg)</code> 各自对合，且作用顺序可交换，组合起来也就是对合的（<code>F(F(x)) = x</code>）。</p>
+		<p class="note">但存在先天极限：中间结果一旦超出色域，会被浏览器钳制到有效范围内，而钳制不可逆，所以全饱和原色（纯红 / 纯绿 / 纯蓝）仍无法精确还原；灰阶与低饱和色不受影响，偏差为 0。</p>
+		<p class="note">下面的图片每张都标了「原本长什么样」，请对照着肉眼判断有没有被改坏——现在预期是基本还原成原样；再往下的「数值化往返测试」用 canvas 把偏差算成具体数字。</p>
+
+		<div class="pairs">
+			<figure class="pair">
+				<img class="shot" width="240" height="160" alt="浅底十字 SVG"
+					src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='160'><rect width='240' height='160' fill='%23f5f5f5'/><path d='M120 40 V120 M80 80 H160' stroke='%23333333' stroke-width='12'/></svg>">
+				<figcaption>浅底 #f5f5f5 + 十字 #333<br>原本：浅灰底上一道清晰的深灰十字，对比分明。</figcaption>
+			</figure>
+			<figure class="pair">
+				<img class="shot" width="240" height="160" alt="深底十字 SVG"
+					src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='160'><rect width='240' height='160' fill='%231a1a1a'/><path d='M120 40 V120 M80 80 H160' stroke='%23eeeeee' stroke-width='12'/></svg>">
+				<figcaption>深底 #1a1a1a + 十字 #eee<br>原本：近黑底上一道亮白十字，对比分明。</figcaption>
+			</figure>
+			<figure class="pair">
+				<img class="shot" width="240" height="160" alt="透明底圆点 SVG"
+					src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='160'><circle cx='120' cy='80' r='40' fill='%23333333'/></svg>">
+				<figcaption>透明底 + 圆 #333<br>原本：透明背景上一个深灰实心圆，落在页面深色底上。</figcaption>
+			</figure>
+		</div>
+
+		<div class="icon-row">
+			<img width="32" height="32" alt="32×32 小图标"
+				src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='%23f5f5f5'/><circle cx='16' cy='16' r='7' fill='%23333333'/></svg>">
+			<span class="note">小图标 32×32，原本：浅底上一个深灰圆点。扩展的图片分类逻辑有 <code>naturalWidth &lt; 100 &amp;&amp; naturalHeight &lt; 100</code> 就跳过的门槛，看它会不会绕过这张小图、但仍然照套反向滤镜。</span>
+		</div>
+
+		<h3 class="rt-h">数值化往返测试 <span class="dim">— canvas 实测 F(F(x))，看反向滤镜到底抵消了多少</span></h3>
+		<p class="note">做法：给每个测试色造一个 1×1 的 canvas 填上该色，把 <code>DPIB_FILTER</code> 连续套两次（第一次的结果画到第二个 canvas，再套一次同一个 filter）得到 <code>F(F(x))</code>，读回像素与原色逐通道比较。理想情况下图片应该原样不动，所以「期望值」这一列就是原色本身。</p>
+		<p class="note"><code>DPIB_FILTER</code> = <code>invert(100%) hue-rotate(180deg)</code> —— 这个值必须和 <code>content.js</code> 里的 <code>SOLARIZE_FILTER</code> 保持一致，否则测出来的是另一回事。</p>
+		<div id="rt-warn"></div>
+		<div class="rt-scroll">
+			<table class="rt-table">
+				<thead>
+					<tr>
+						<th>原色</th>
+						<th>原色 hex</th>
+						<th>期望值（= 原色）</th>
+						<th>F(F(x)) 实际 hex</th>
+						<th>每通道偏差（实际 − 原色）</th>
+						<th>是否还原</th>
+					</tr>
+				</thead>
+				<tbody id="rt-tbody"></tbody>
+			</table>
+		</div>
+		<p class="note" id="rt-summary">（计算中…）</p>
+		<p class="note"><b>结论：</b>灰阶那几行（纯黑 / 深灰 / 中灰 / 浅灰 / 纯白）偏差应当是 0，个别可能到 ±1；红、绿这类全饱和原色仍有偏差，属已知极限——中间结果超色域被浏览器钳制、钳制不可逆，无法精确还原。</p>
+
+		<!-- ===================== §2 ===================== -->
+		<h2>§2 高饱和大色块 <span class="dim">— 考 Remap 模式：鲜艳色被换成 Solarized 强调色</span></h2>
+		<p class="note">6 个大色块（≥260×120）。每块里一行白字、一行黑字，块下方小字标出原始十六进制值。对比「改之前是什么、改之后变成什么」。</p>
+
+		<div class="blocks">
+			<div class="block-cell">
+				<div class="block" style="background:#ff0000"><span class="l-white">白字 Aa 123</span><span class="l-black">黑字 Aa 123</span></div>
+				<div class="hex">#ff0000</div>
+			</div>
+			<div class="block-cell">
+				<div class="block" style="background:#00c853"><span class="l-white">白字 Aa 123</span><span class="l-black">黑字 Aa 123</span></div>
+				<div class="hex">#00c853</div>
+			</div>
+			<div class="block-cell">
+				<div class="block" style="background:#2962ff"><span class="l-white">白字 Aa 123</span><span class="l-black">黑字 Aa 123</span></div>
+				<div class="hex">#2962ff</div>
+			</div>
+			<div class="block-cell">
+				<div class="block" style="background:#ff8c00"><span class="l-white">白字 Aa 123</span><span class="l-black">黑字 Aa 123</span></div>
+				<div class="hex">#ff8c00</div>
+			</div>
+			<div class="block-cell">
+				<div class="block" style="background:#9400d3"><span class="l-white">白字 Aa 123</span><span class="l-black">黑字 Aa 123</span></div>
+				<div class="hex">#9400d3</div>
+			</div>
+			<div class="block-cell">
+				<div class="block" style="background:#00bcd4"><span class="l-white">白字 Aa 123</span><span class="l-black">黑字 Aa 123</span></div>
+				<div class="hex">#00bcd4</div>
+			</div>
+		</div>
+
+		<!-- ===================== §3 ===================== -->
+		<h2>§3 滚动条 <span class="dim">— 考 color-scheme</span></h2>
+		<p class="note">本页在主 <code>&lt;style&gt;</code> 里声明了 <code>html { color-scheme: dark; }</code>，并且页面高度超过两屏，滚动条一定出现。观察滚动条颜色是否跟页面一起变浅、还是保持深色（不匹配）。</p>
+
+		<!-- ===================== §4 ===================== -->
+		<h2>§4 性能 <span class="dim">— 考 MutationObserver + 自写 inline style 造成的卡顿</span></h2>
+		<p class="note">点击后往容器插入 3000 个 <code>&lt;div&gt;</code>，之后每 200ms 给其中 500 个切换一次 class，持续 10 秒。期间实时显示「第几轮 / 每轮耗时」，并用 requestAnimationFrame 同步显示每秒帧率——卡不卡一目了然。</p>
+		<button id="perf-go">生成 3000 个元素并持续变动</button>
+		<div id="perf-fps-line">rAF 帧率：<span id="perf-fps">–</span> fps</div>
+		<div id="perf-stat">（未开始）</div>
+		<pre id="perf-log"></pre>
+		<div class="perf-box" id="perf-box"></div>
+
+		<!-- ===================== §5 ===================== -->
+		<h2>§5 渐变文字 <span class="dim">— background-clip: text</span></h2>
+		<div class="gradient-text">Gradient Heading</div>
+		<div class="gradient-text-blue">Blue-Cyan Gradient</div>
+		<p class="note">预期：渐变被抹掉，文字变成单一 Solarized 强调色（可读）。如果文字直接消失或全透明，就是失败。</p>
+
+		<!-- ===================== §6 ===================== -->
+		<h2>§6 深色伪元素 <span class="dim">— ::before / ::after</span></h2>
+		<p class="pseudo-test">这一行左边有一个深色 ::before 圆点（深底 + 紫色描边）。</p>
+		<div class="pseudo-overlay">内容上方盖着一层深色半透明 ::after 叠加。</div>
+		<p class="note">预期：伪元素里的深色不会被逐元素重映射处理（content 里的颜色拿不到），可能保持深色或与页面不协调。</p>
+
+		<!-- ===================== §7 ===================== -->
+		<h2>§7 深色渐变背景 <span class="dim">— 非文字的 linear-gradient</span></h2>
+		<div class="gradient-bg">暗到更暗的渐变背景，上面是浅色文字。</div>
+		<p></p>
+		<div class="gradient-bg-colorful">鲜艳的紫蓝渐变背景。</div>
+		<p class="note">预期：渐变被替换为纯 Solarized 底色（渐变信息丢失）。</p>
+
+		<div class="tall-filler">
+			<div class="mark">（占位区：撑高页面，让滚动条出现。§3 用。）</div>
+		</div>
+
+		<!-- ===================== 清单 ===================== -->
+		<div class="checklist">
+			<h2>怎么看这张页对不对（逐节预期）</h2>
+			<ul>
+				<li><b>§1（Filter 模式）· 数值化往返测试</b>：扩展给图片套的反向滤镜用的是<b>同一个</b>滤波器，所以它必须对合——<code>invert(100%)</code> 与 <code>hue-rotate(180deg)</code> 各自对合且可交换，组合起来也是对合的。
+					<span class="bad">灰阶那几行偏差应当是 0 或 ±1；红 / 绿等全饱和原色仍有偏差，属已知极限（超色域被钳制、钳制不可逆）。</span>
+					若表格显示「本浏览器不支持 canvas filter」，说明浏览器没跑测试，不代表没有偏差，请换 Chrome / Edge。</li>
+				<li><b>§1 图片（肉眼）</b>：三张 data-URI 图各配了「原本长什么样」的说明，对照着看有没有被改坏——现在预期是基本还原成原样。<span class="bad">若明显发闷、发黄、深底变浅底，说明反向滤镜没抵消干净。</span></li>
+				<li><b>§1 小图标</b>：32×32 因 <code>&lt; 100px</code> 门槛会被跳过分类，但仍会被 counter-filter 命中 —— 说明尺寸门槛没有绕过滤镜本身。</li>
+				<li><b>§2（Remap 模式）</b>：鲜艳色块若被换成 Solarized 强调色（例如 #2962ff → 紫/蓝、#9400d3 → 品红），块里的黑/白字会被强制改成奶油色 <code>#fdf6e3</code>。
+					<span class="bad">若某块颜色没变（如 #00c853、#00bcd4），说明重映射的亮度阈值把它漏掉了 —— 部分色块处理、部分不处理，页面会花。</span></li>
+				<li><b>§3</b>：声明了 <code>color-scheme: dark</code>，滚动条初始应为深色。
+					<span class="bad">翻浅后滚动条仍是深色 → 扩展没处理 color-scheme，视觉不协调。</span></li>
+				<li><b>§4</b>：点击后应能持续出帧。
+					<span class="bad">若 rAF 帧率明显掉到个位数、每轮耗时飙到几十上百 ms，说明 MutationObserver 对大批 class 变动 + 自写 inline style 的处理造成了卡顿。</span></li>
+				<li><b>§5</b>：渐变文字应变成可读的单一强调色。<span class="bad">变透明/消失 = 失败。</span></li>
+				<li><b>§6</b>：::before 圆点、::after 叠加里用的是伪元素颜色，逐元素重映射拿不到。<span class="bad">保持深色、和浅色页面不协调 = 已知缺陷。</span></li>
+				<li><b>§7</b>：渐变背景应被替换为纯色。<span class="bad">若仍是渐变、或变成难看的整块色，说明渐变处理不完整。</span></li>
+			</ul>
+		</div>
+	</div>
+
+	<script>
+		(function () {
+			/* ---------- §1 数值化往返测试 ---------- */
+			/* DPIB_FILTER 必须和 content.js 里的 SOLARIZE_FILTER 保持一致 */
+			var DPIB_FILTER = 'invert(100%) hue-rotate(180deg)';
+			var RT_COLORS = [
+				{ name: '纯黑', hex: '#000000' },
+				{ name: '深灰', hex: '#1a1a1a' },
+				{ name: '中灰', hex: '#808080' },
+				{ name: '浅灰', hex: '#f5f5f5' },
+				{ name: '纯白', hex: '#ffffff' },
+				{ name: '红', hex: '#e74c3c' },
+				{ name: '绿', hex: '#2ecc71' },
+				{ name: '蓝', hex: '#3498db' }
+			];
+
+			function hex2rgb(hex) {
+				return [
+					parseInt(hex.slice(1, 3), 16),
+					parseInt(hex.slice(3, 5), 16),
+					parseInt(hex.slice(5, 7), 16)
+				];
+			}
+
+			function rgb2hex(rgb) {
+				function pad(n) {
+					var s = Math.round(n).toString(16);
+					return s.length < 2 ? '0' + s : s;
+				}
+				return '#' + pad(rgb[0]) + pad(rgb[1]) + pad(rgb[2]);
+			}
+
+			function fmtSigned(n) {
+				return (n > 0 ? '+' : '') + n;
+			}
+
+			function makeCtx() {
+				var cv = document.createElement('canvas');
+				cv.width = 1;
+				cv.height = 1;
+				try { return cv.getContext('2d', { willReadFrequently: true }); } catch (e) { return null; }
+			}
+
+			/* 运行时探测 ctx.filter 是否真的生效（设置后无效果 = 不支持） */
+			function canvasFilterSupported() {
+				var ctx = makeCtx();
+				if (!ctx) return false;
+				try {
+					ctx.filter = 'none';
+					if (typeof ctx.filter !== 'string') return false;
+					ctx.fillStyle = '#ffffff';
+					ctx.fillRect(0, 0, 1, 1);
+					ctx.filter = 'invert(100%)';
+					ctx.fillStyle = '#ffffff';
+					ctx.fillRect(0, 0, 1, 1);
+					ctx.filter = 'none';
+					var px = ctx.getImageData(0, 0, 1, 1).data;
+					/* invert(100%) 的白应变成黑 */
+					return px[0] < 40 && px[1] < 40 && px[2] < 40;
+				} catch (e) { return false; }
+			}
+
+			/* 把同一个 filter 连续套两次，返回 F(F(x)) 的 [r, g, b, a] */
+			function applyFilterTwice(hex) {
+				var src = makeCtx();
+				src.fillStyle = hex;
+				src.fillRect(0, 0, 1, 1);
+
+				var pass1 = makeCtx();
+				pass1.filter = DPIB_FILTER;
+				pass1.drawImage(src.canvas, 0, 0);
+
+				var pass2 = makeCtx();
+				pass2.filter = DPIB_FILTER;
+				pass2.drawImage(pass1.canvas, 0, 0);
+
+				var d = pass2.getImageData(0, 0, 1, 1).data;
+				return [d[0], d[1], d[2], d[3]];
+			}
+
+			(function renderRoundtrip() {
+				var tbody = document.getElementById('rt-tbody');
+				var warn = document.getElementById('rt-warn');
+				var summary = document.getElementById('rt-summary');
+				if (!tbody || !warn || !summary) return;
+
+				var supported = canvasFilterSupported();
+				var rows = '';
+				var restored = 0;
+				var maxDev = 0;
+
+				for (var i = 0; i < RT_COLORS.length; i++) {
+					var c = RT_COLORS[i];
+					var orig = hex2rgb(c.hex);
+					var measuredCell, devCell, verdictCell;
+
+					if (!supported) {
+						measuredCell = '<span class="rt-unsupported">—（未测）</span>';
+						devCell = '<span class="rt-unsupported">—</span>';
+						verdictCell = '<span class="rt-unsupported">无法判定</span>';
+					} else {
+						var out = applyFilterTwice(c.hex);
+						var dr = out[0] - orig[0];
+						var dg = out[1] - orig[1];
+						var db = out[2] - orig[2];
+						var dev = Math.max(Math.abs(dr), Math.abs(dg), Math.abs(db));
+						if (dev > maxDev) maxDev = dev;
+						var exact = (dr === 0 && dg === 0 && db === 0);
+						if (exact) restored++;
+
+						measuredCell = '<code>' + rgb2hex(out) + '</code>';
+						devCell = '<span class="' + (exact ? 'rt-ok' : 'rt-dev') + '">ΔR ' + fmtSigned(dr) + ' · ΔG ' + fmtSigned(dg) + ' · ΔB ' + fmtSigned(db) + '</span>';
+						verdictCell = exact ? '<span class="rt-ok">是</span>' : '<span class="rt-bad">否</span>';
+					}
+
+					rows += '<tr>' +
+						'<td><span class="rt-swatch" style="background:' + c.hex + '"></span><span class="rt-mono">' + c.name + '</span></td>' +
+						'<td><code>' + c.hex + '</code></td>' +
+						'<td><code>' + c.hex + '</code></td>' +
+						'<td>' + measuredCell + '</td>' +
+						'<td>' + devCell + '</td>' +
+						'<td>' + verdictCell + '</td>' +
+						'</tr>';
+				}
+
+				tbody.innerHTML = rows;
+
+				if (!supported) {
+					warn.innerHTML = '<div class="rt-warn-box">本浏览器不支持 canvas filter，此测试无法进行（<code>ctx.filter</code> 设置后不生效，或拿不到 2D 上下文）。请在 Chrome / Edge 下打开本页。</div>';
+					summary.textContent = '本浏览器不支持 canvas filter，此测试无法进行。';
+				} else {
+					summary.innerHTML = '<b>小结：</b>' + RT_COLORS.length + ' 个测试色里，<b>' + restored +
+						'</b> 个被精确还原（偏差全为 0），最大偏差 <b>' + maxDev + '</b>。';
+				}
+			})();
+
+			/* ---------- 同步 rAF 帧率计数 ---------- */
+			var fpsEl = document.getElementById('perf-fps');
+			var frames = 0;
+			var t0 = performance.now();
+			var lastFps = 0;
+			function tick() {
+				frames++;
+				var now = performance.now();
+				if (now - t0 >= 1000) {
+					lastFps = Math.round(frames * 1000 / (now - t0));
+					fpsEl.textContent = String(lastFps);
+					frames = 0;
+					t0 = now;
+				}
+				requestAnimationFrame(tick);
+			}
+			requestAnimationFrame(tick);
+
+			/* ---------- §4 压力测试 ---------- */
+			var go = document.getElementById('perf-go');
+			var box = document.getElementById('perf-box');
+			var stat = document.getElementById('perf-stat');
+			var log = document.getElementById('perf-log');
+			var running = false;
+
+			go.addEventListener('click', function () {
+				if (running) return;
+				running = true;
+				go.disabled = true;
+				box.textContent = '';
+				log.textContent = '';
+
+				var insertT0 = performance.now();
+				var frag = document.createDocumentFragment();
+				for (var i = 0; i < 3000; i++) {
+					var d = document.createElement('div');
+					d.className = 'perf-item';
+					d.textContent = String(i);
+					d.style.backgroundColor = 'hsl(' + (i % 360) + ', 40%, 30%)';
+					frag.appendChild(d);
+				}
+				box.appendChild(frag);
+				var insertMs = Math.round(performance.now() - insertT0);
+				log.textContent += '插入 3000 个元素：' + insertMs + ' ms\n';
+
+				var nodes = Array.prototype.slice.call(box.children);
+				var round = 0;
+				var TOTAL = 50;   /* 50 × 200ms = 10s */
+
+				var timer = setInterval(function () {
+					if (round >= TOTAL) {
+						clearInterval(timer);
+						running = false;
+						go.disabled = false;
+						stat.textContent = '结束。最后一秒 rAF 帧率约 ' + lastFps + ' fps';
+						log.textContent += '结束：最后一秒 rAF 约 ' + lastFps + ' fps\n';
+						log.scrollTop = log.scrollHeight;
+						return;
+					}
+					var t = performance.now();
+					for (var k = 0; k < 500; k++) {
+						var el = nodes[(round * 500 + k) % nodes.length];
+						el.classList.toggle('on');
+					}
+					var dt = performance.now() - t;
+					round++;
+					stat.textContent = '第 ' + round + ' / ' + TOTAL + ' 轮 · 本轮 ' + dt.toFixed(1) + ' ms · rAF ' + lastFps + ' fps';
+					log.textContent += '轮 ' + round + '：' + dt.toFixed(1) + ' ms，rAF ' + lastFps + ' fps\n';
+					log.scrollTop = log.scrollHeight;
+				}, 200);
+			});
+		})();
+	</script>
+</body>
+</html>
