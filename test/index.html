@@ -55,6 +55,7 @@
 		.group-cell { color: #9898b0; font-weight: 700; white-space: nowrap; }
 		.group-cell.native { color: #60a5fa; }
 		.group-cell.detect { color: #fbbf24; }
+		.group-cell.palette { color: #c084fc; }
 
 		.run {
 			background: #14142a;
@@ -173,6 +174,12 @@
 					<td>深色页无任何可切原生主题，含 img / video / canvas（均 200×150）</td>
 					<td class="expect-ok">只用原生不动；滤镜模式下 img/video/canvas 都要拿到反向滤镜</td>
 					<td class="group-cell detect">判定 · 无原生浅色页的滤镜与媒体反相</td>
+				</tr>
+				<tr>
+					<td class="case-cell"><a href="cases/p-palette.html">p-palette</a></td>
+					<td>深色页无任何可切原生主题；五组真实世界颜色样张 + 文字色 + 边框色</td>
+					<td class="expect-ok">带色相的收成同色相浅色块（不再换色相）、中性深底落奶油底、文字压深到过 AA、边框重画成看得见的一条线</td>
+					<td class="group-cell palette">调色板 · remap 的配色效果</td>
 				</tr>
 			</tbody>
 		</table>

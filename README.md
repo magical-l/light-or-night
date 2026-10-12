@@ -14,6 +14,8 @@ Some websites just love the dark side. Your eyes at 2 PM on a Tuesday respectful
 
 **If a site has no light theme, a filter takes over.** A full-page filter brings the page back to light, with an exactly-inverse counter-filter applied to images, video and canvas — so your photos stay untouched. Toggling the filter off and on again returns every pixel to where it started.
 
+**And if a filter is not precise enough, there is a color remap.** Instead of filtering the whole page, it goes element by element: a colored surface keeps **its own hue** and is lightened into a soft tint, with text on it darkened to match — the blue button stays blue, it just becomes a light-mode blue button. Neutral dark surfaces (page, cards, panels) come out as a cream base, graded by how dark they originally were so the page keeps its sense of depth. Text is pushed to WCAG AA against whatever it sits on.
+
 **Verified, not assumed.** After switching, the extension re-measures the page and **rolls back** if nothing actually got lighter — a site is never left half-converted.
 
 **Every site is yours to set.** One global default, plus a per-site override with six modes:
@@ -21,9 +23,9 @@ Some websites just love the dark side. Your eyes at 2 PM on a Tuesday respectful
 - Off
 - Native only
 - Quick filter only
-- Precise Solarized only
+- Color remap only
 - Native first, else quick filter *(default)*
-- Native first, else Precise Solarized
+- Native first, else color remap
 
 **Features:**
 
@@ -43,4 +45,4 @@ Some websites just love the dark side. Your eyes at 2 PM on a Tuesday respectful
 
 Named after the Rolling Stones classic, because some things just shouldn't be painted black.
 
-Made by Marcin Kleczek (marcin.kleczek@gmail.com). MIT License. 28 KB packaged.
+Made by Marcin Kleczek (marcin.kleczek@gmail.com). MIT License. 32 KB packaged.
