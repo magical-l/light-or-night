@@ -1,5 +1,5 @@
 // =============================================================================
-// Don't! Paint it black — Content Script
+// Light or Night / 颠倒黑白 — Content Script（派生自 Marcin Kleczek 的 Don't! Paint it black，MIT）
 // Three-mode architecture: Native Switch → CSS Filter → DOM Remap
 //
 // Author: Marcin Kleczek <marcin.kleczek@gmail.com>

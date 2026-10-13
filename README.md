@@ -1,14 +1,14 @@
-# Store Listing: Don't! Paint it black
+# Store Listing: Light or Night
 
 ## Short description (max 132 characters)
 
-Dark pages converted to light automatically. Uses the site's own light theme when there is one; a CSS filter when there isn't.
+Automatically turns dark pages light — the site's own theme when it has one, else a color remap or filter. Per-site settings.
 
 ## Long description
 
 Some websites just love the dark side. Your eyes at 2 PM on a Tuesday respectfully disagree.
 
-**Don't! Paint it black** turns dark pages light — **by itself**, the moment a page loads. No clicking through a menu on every site.
+**Light or Night** turns dark pages light — **by itself**, the moment a page loads. No clicking through a menu on every site.
 
 **It tries the polite way first.** If a site ships its own light theme, we find the switch that site itself uses and flip it. Nothing is repainted, nothing is inverted — it is the site's own light mode. That covers Tailwind-style `dark` classes, `data-theme` and `data-bs-theme` attributes, GitHub-style `data-color-mode`, namespaced class names, and anything else whose light counterpart can be found in the page's own stylesheets.
 

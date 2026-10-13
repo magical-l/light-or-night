@@ -1,4 +1,6 @@
 {
+  "extDesc": { "message": "Automatically turns dark pages light — the site's own theme when it has one, else a color remap or filter. Per-site settings." },
+  "extName": { "message": "Light or Night" },
   "checking": { "message": "Checking..." },
   "cannotAccessPage": { "message": "Cannot access page" },
   "cannotRunHere": { "message": "Can't run on this page (chrome://, extensions, etc.)" },

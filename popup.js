@@ -1,4 +1,4 @@
-// Don't! Paint it black — Popup
+// Light or Night / 颠倒黑白 — Popup（派生自 Marcin Kleczek 的 Don't! Paint it black，MIT）
 // Author: Marcin Kleczek <marcin.kleczek@gmail.com>
 // License: MIT
 

@@ -1,4 +1,4 @@
-# Privacy Policy — Don't! Paint it black
+# Privacy Policy — Light or Night
 
 **Last updated:** April 2, 2026
 
@@ -8,7 +8,7 @@ This extension does not collect, store, or transmit any personal data. Period.
 
 ## The slightly longer version
 
-**Don't! Paint it black** is a browser extension that modifies the visual appearance of web pages locally in your browser. Here is exactly what it does and does not do:
+**Light or Night** is a browser extension that modifies the visual appearance of web pages locally in your browser. Here is exactly what it does and does not do:
 
 ### What the extension DOES
 

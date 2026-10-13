@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "default_locale": "en",
-  "name": "Don't! Paint it black",
-  "version": "2.1.0",
-  "description": "Converts dark websites to light. Uses the site's own light theme when available, otherwise a CSS filter. Per-site settings.",
+  "name": "__MSG_extName__",
+  "version": "2.2.0",
+  "description": "__MSG_extDesc__",
   "author": "Marcin Kleczek <marcin.kleczek@gmail.com>",
   "homepage_url": "https://github.com/marcinkleczek/dont-paint-it-black",
   "permissions": ["storage", "activeTab"],

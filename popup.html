@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Don't! Paint it black — Author: Marcin Kleczek <marcin.kleczek@gmail.com> — MIT License -->
+<!-- Light or Night / 颠倒黑白 — 派生自 "Don't! Paint it black" by Marcin Kleczek <marcin.kleczek@gmail.com>，MIT License -->
 <html>
 <head>
   <style>
@@ -15,7 +15,6 @@
     .header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
     .header img { width: 24px; height: 24px; }
     .header h1 { font-size: 15px; font-weight: 700; color: #073642; line-height: 1.2; }
-    .header h1 span { color: #b58900; }
 
     /* Status badge — describes the page only */
     .status { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-bottom: 12px; }
@@ -93,7 +92,7 @@
 <body>
   <div class="header">
     <img src="icons/icon48.png" alt="">
-    <h1>Don't! <span>Paint it black</span></h1>
+    <h1 data-i18n="extName">Light or Night</h1>
   </div>
 
   <div id="statusBadge" class="status light" data-i18n="checking">Checking...</div>

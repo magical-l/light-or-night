@@ -1,4 +1,6 @@
 {
+  "extDesc": { "message": "自动把深色网页翻成浅色：站点自带浅色主题就切它，没有就上滤镜或颜色映射。可逐站点设置。" },
+  "extName": { "message": "颠倒黑白" },
   "checking": { "message": "检查中..." },
   "cannotAccessPage": { "message": "无法访问页面" },
   "cannotRunHere": { "message": "无法在此页面运行（chrome://、扩展等）" },

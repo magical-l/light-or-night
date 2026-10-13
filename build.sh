@@ -17,7 +17,7 @@ FILES=(
 
 # 版本号取自 manifest，避免 zip 名字和包内容对不上
 VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' manifest.json | head -1)
-DIST="dont-paint-it-black-v${VERSION}.zip"
+DIST="light-or-night-v${VERSION}.zip"
 rm -f "$DIST"
 
 # Git Bash 不带 zip，Windows 上退到 7-Zip
