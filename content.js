@@ -69,7 +69,7 @@ let state = {
   activeMode: null,       // "native" | "filter" | "remap"
   nativeSignals: [],
   lsSwitch: null,         // 站点把主题存在 localStorage 时的浅色值（最后手段那一档）
-  appliedMode: null,      // 本次生效用的是哪个「翻转模式」（设置一变要判断是否重来）
+  appliedMode: null,      // 本次生效的那次处置（设置一变要判断是否重来）
   autoApplied: false,     // 当前这次应用是自动生效的，还是用户手点的
   applying: false,        // native 的切换+验证是异步的，用它挡住并发重入
 };
@@ -200,22 +200,11 @@ function firstPaintedBackground(el) {
 }
 
 function detectDarkPage() {
-  // 以 body 的有效背景为准：body 是内容容器，html 只是兜底。
-  // 反过来（html 深色就当整页深色）会把 meshy.ai 那种 body/main 全浅、
-  // 只在 html 上挂深色兜底的站点误判。
+  // 整站深浅以画布为准：body 沿祖先向上第一个画了底的元素，其底色就是站点底色。
   const pageBg = firstPaintedBackground(document.body);
-  if (pageBg) return isDark(pageBg);
-
-  // 不采信 meta[theme-color]：那是站点给浏览器 UI 配的品牌色，
-  // 浅色页配一个深色品牌色很常见。
-  // body 和 html 都没画背景时（底色画在别的容器上），才退回这个启发式。
-  let darkCount = 0;
-  const samples = document.querySelectorAll("header, nav, main, [class*='dark'], [class*='Dark']");
-  for (const el of Array.from(samples).slice(0, 5)) {
-    const bg = parseColor(getComputedStyle(el).backgroundColor);
-    if (bg && isDark(bg)) darkCount++;
-  }
-  return darkCount >= 2;
+  // 画布没画底就不动 —— 宁可不动，也不猜。没有依据时猜错的方向是把浅色页翻黑。
+  if (!pageBg) return false;
+  return isDark(pageBg);
 }
 
 // =============================================================================
@@ -385,11 +374,6 @@ function revertNativeSwitch() {
   nativeOriginals = [];
 }
 
-function removeNativeSwitch() {
-  revertNativeSwitch();
-  location.reload();
-}
-
 // ---------- 切换后的验证 ----------
 
 const VERIFY_DELAYS = [0, 120, 400, 900];
@@ -432,7 +416,7 @@ async function readUndoMap() {
   try { const s = await chrome.storage.sync.get({ lsUndo: {} }); return s.lsUndo || {}; } catch (e) { return {}; }
 }
 
-// 结算上一次的试验：页面变浅了算成功，把原值记进 lsUndo，好让「撤销」还的回去；
+// 结算上一次的试验：页面变浅了算成功，把原值记进 lsUndo，关掉本站时好把站点自己的主题值还回去；
 // 没变浅就把原值写回、记下本站已失败（本标签页不再重试）。
 async function settleLocalStorageTrial() {
   const raw = sessionGet(LS_TRIAL_KEY);
@@ -456,7 +440,7 @@ async function settleLocalStorageTrial() {
   location.reload();
 }
 
-// 撤销时把站点自己的主题值还回去
+// 关闭本站时把站点自己的主题值还回去
 async function restoreLocalStorageUndo() {
   const host = hostKey();
   try {
@@ -560,13 +544,6 @@ function classifySingleImage(img) {
       img.setAttribute("data-dpib-dark", "1");
     }
   } catch (e) { /* CORS */ }
-}
-
-function removeFilterMode() {
-  const el = document.getElementById("dpib-filter");
-  if (el) el.remove();
-  for (const img of document.querySelectorAll("[data-dpib-dark]")) img.removeAttribute("data-dpib-dark");
-  for (const img of document.querySelectorAll("[data-dpib-classified]")) img.removeAttribute("data-dpib-classified");
 }
 
 // =============================================================================
@@ -781,11 +758,6 @@ function injectRemapStyles() {
   document.head.appendChild(style);
 }
 
-function removeRemapStyles() {
-  const el = document.getElementById("dpib-remap-global");
-  if (el) el.remove();
-}
-
 // =============================================================================
 // IMAGE ANALYSIS (shared by filter + remap modes)
 // =============================================================================
@@ -937,25 +909,15 @@ function validateContrast() {
 // =============================================================================
 
 // 站点声明了 color-scheme: dark 时，即使页面被翻浅，滚动条和表单控件仍按深色渲染。
-// 用 inline + important 压过站点样式表；移除时还原站点原本的 inline 值。
-let savedColorScheme = null;
+// 用 inline + important 压过站点样式表；只负责设置，不做移除或回退。
 
 function applyLightColorScheme() {
   const style = document.documentElement.style;
-  if (savedColorScheme === null) savedColorScheme = style.getPropertyValue("color-scheme");
   style.setProperty("color-scheme", "light", "important");
 }
 
-function removeLightColorScheme() {
-  if (savedColorScheme === null) return;
-  const style = document.documentElement.style;
-  if (savedColorScheme) style.setProperty("color-scheme", savedColorScheme);
-  else style.removeProperty("color-scheme");
-  savedColorScheme = null;
-}
-
 // =============================================================================
-// APPLY / REMOVE ORCHESTRATORS
+// APPLY ORCHESTRATORS
 // =============================================================================
 
 function startFilterMode() {
@@ -971,66 +933,52 @@ function startRemapMode() {
   startObserving();
 }
 
-// 按模式跑一遍，返回**实际生效的方法**（"native" | "filter" | "remap"）；关闭或全都失败则 null。
-// 「优先 X」的两档失败后会落到兜底，所以返回值不一定是模式本身。
-async function runMode(mode, isAuto) {
-  switch (mode) {
-    case "native":
-      return (await applyNative(isAuto)) ? "native" : null;
-    case "filter":
-      startFilterMode();
-      return "filter";
-    case "remap":
-      startRemapMode();
-      return "remap";
-    case MODE_NATIVE_FILTER:
-      if (await applyNative(isAuto)) return "native";
-      startFilterMode();
-      return "filter";
-    case MODE_NATIVE_REMAP:
-      if (await applyNative(isAuto)) return "native";
-      startRemapMode();
-      return "remap";
-    default:   // "off"
-      return null;
-  }
+// 「优先原生」能不能试，由检测决定 —— 站点那个开关是用来把深色切成浅色的，
+// 页面已经是浅色时它无事可做；而且复测函数在本来就是浅色的页上会假成功、把整条链提前结束。
+// 所以候选（state.nativeSignals）在 detect() 里就按 state.isDark 门控好了，这里只读不算。
+// 返回**实际生效的方法**："native" | "filter" | "remap"。
+function runMethod({ preferNative, method }, isAuto) {
+  if (!preferNative || !state.nativeSignals.length) return Promise.resolve(method);
+  return applyNative(isAuto).then((ok) => (ok ? "native" : method));
 }
 
-async function apply(mode, isAuto) {
+async function apply(plan, isAuto) {
   if (state.isApplied || state.applying) return;
   state.applying = true;
   try {
-    const method = await runMode(mode, isAuto);
-    if (!method) return;                       // 关闭 / 切不动 → 就当没切过，不谎报成功
+    const method = await runMethod(plan, isAuto);
+    if (!method) return;                       // 切不动 → 就当没切过，不谎报成功
+    // runMethod 只**返回**方法名，而且 native 那条它已经在内部跑完了；
+    // filter / remap 的注入必须在这里做，漏了这两行就等于那两档完全不生效。
+    if (method === "filter") startFilterMode();
+    else if (method === "remap") {
+      startRemapMode();
+      // 对比度校验只对「颜色映射」有意义（它是唯一逐元素改色的手段）。
+      // 这是开发期诊断，打一条到控制台就够，不进 UI。
+      const v = validateContrast();
+      console.log(`[颠倒黑白] 对比度校验：${v.checked} 个含文字元素，${v.passed} 通过，${v.issues.length} 未达 AA`);
+      for (const it of v.issues) {
+        console.log(`  ${it.level === "critical" ? "严重" : "警告"} ${it.ratio}:1 — <${it.tag}> "${it.text}"  文字 ${it.textColor} / 底色 ${it.bgColor}`);
+      }
+    }
     applyLightColorScheme();
     state.activeMode = method;
-    state.appliedMode = mode;                  // 记住用的是哪个模式，设置一变好判断要不要重来
+    state.appliedMode = planKey(plan);         // 记住用的是哪次处置，设置一变好判断要不要重来
     state.isApplied = true;
+    state.autoApplied = isAuto;                // 记下这次是自动生效的还是用户手点的
   } finally {
     state.applying = false;
   }
 }
 
-async function remove() {
+// 「关闭本站」：设置由 popup 负责写；这里做两件事——把扩展写进站点 localStorage
+// 的主题值还回去，再重载页面把注入过的样式（滤镜 / 映射）撤干净。
+// 重载判据带上 undo：那一档页面是扩展改的、却没走应用路径，只认 state.isApplied 会漏掉它。
+async function stopSite() {
   const host = hostKey();
   const undo = (await readUndoMap())[host];
-
-  // 「撤销」= 把本站设成「关闭」，否则重载后又会被自动翻回去。
-  // localStorage 那一档是同道理：它若是自动改的，也要一并关掉，不然撤销完又会被改回来。
-  if (state.autoApplied || (undo && undo.auto)) await writeSiteMode(host, "off");
-  state.autoApplied = false;
-  removeLightColorScheme();
-  if (undo) await restoreLocalStorageUndo();   // 站点的主题值若是扩展改的，还回去
-
-  switch (state.activeMode) {
-    case "native":  removeNativeSwitch(); break;
-    case "filter":  stopObserving(); removeFilterMode(); break;
-    case "remap":   stopObserving(); removeRemapStyles(); location.reload(); break;
-    default:        location.reload(); break;
-  }
-  state.isApplied = false;
-  state.activeMode = null;
-  state.appliedMode = null;
+  if (undo) await restoreLocalStorageUndo();
+  if (state.isApplied || undo) location.reload();
 }
 
 // =============================================================================
@@ -1040,21 +988,18 @@ async function remove() {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // all_frames 下每个 iframe 都会收到 popup 的广播消息，谁先回谁算。
   // 让 iframe 也回，popup 会把 iframe 那边的状态当成整页的（看起来像"扩展没生效"），
-  // 而点「撤销」会把每个 iframe 都重载一遍。所以只让顶层文档应答。
+  // 而点「关闭本站」会把每个 iframe 都重载一遍。所以只让顶层文档应答。
   if (window !== window.top) return;
   switch (msg.action) {
     case "getStatus":
       // 等 INIT 的 settle + detect 落定，免得在这个窗口里报出初始值
       ready.then(getStatus).then(sendResponse);
       break;
-    case "remove":
-      ready.then(remove).then(() => sendResponse({ ok: true }));
+    case "stopSite":
+      ready.then(stopSite).then(() => sendResponse({ ok: true }));
       break;
     case "settingsChanged":
       ready.then(onSettingsChanged).then(() => sendResponse({ ok: true }));
-      break;
-    case "validate":
-      ready.then(() => sendResponse(validateContrast()));
       break;
     default:
       sendResponse({ error: "unknown action" });
@@ -1067,14 +1012,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 // =============================================================================
 
 // ---------- 设置 ----------
-// 「翻转模式」是唯一的设置概念，取值域全局与本站共用；本站多一个「跟随全局」（= 不写进 sites）。
-// 全局存 globalMode，本站覆盖存 sites[host]；不加「不启用」之外的第二个开关——
-// 「本站是否生效」和「本站用什么模式」本来就是同一个问题。
-const MODES = ["off", "native", "filter", "remap", "native-filter", "native-remap"];
-const MODE_NATIVE_FILTER = "native-filter";
-const MODE_NATIVE_REMAP = "native-remap";
-// 默认：优先用站点自己的浅色主题（零破坏），没有就落滤镜兜底
-const DEFAULT_MODE = "native-filter";
+// 设置分两级：全局是「自动」（检测说了算），本站覆盖是「断言」（你说了算，不检测）。
+// 全局存 global，本站覆盖存 sites[host]；本站不设键 = 跟随全局。
+// 开箱默认（读不到存储时的兜底）由共享模型 MODEL.DEFAULT_GLOBAL 给出。
 
 // 用 host 而不是 hostname：hostname 不带端口，localhost:8000 和 localhost:3000 会共用一条设置。
 // 不含路径——「本站」= 这个域名的整个站。
@@ -1082,35 +1022,24 @@ function hostKey() {
   try { return location.host || ""; } catch (e) { return ""; }
 }
 
-function isMode(v) { return MODES.indexOf(v) !== -1; }
-
 async function readSettings() {
   try {
-    const raw = await chrome.storage.sync.get({ globalMode: DEFAULT_MODE, sites: {} });
+    const raw = await chrome.storage.sync.get({ global: null, sites: {} });
     const sites = {};
     for (const host of Object.keys(raw.sites || {})) {
-      if (isMode(raw.sites[host])) sites[host] = raw.sites[host];   // 认不出的值当没设过
+      const s = MODEL.normalizeSetting(raw.sites[host]);   // 坏值当没设过
+      if (s) sites[host] = s;
     }
-    return { globalMode: isMode(raw.globalMode) ? raw.globalMode : DEFAULT_MODE, sites };
+    return { global: MODEL.normalizeSetting(raw.global) || MODEL.DEFAULT_GLOBAL, sites };
   } catch (e) {
-    return { globalMode: "off", sites: {} };   // 读不到设置时保守：不动页面
+    // 读不到设置时保守：不动页面
+    return { global: { enabled: false, preferNative: true, method: "filter" }, sites: {} };
   }
 }
 
-// 本站生效的模式 = 本站覆盖值，没设过就跟随全局
-function resolveMode(settings, host) {
-  const own = settings.sites[host];
-  return isMode(own) ? own : settings.globalMode;
-}
-
-async function writeSiteMode(host, mode) {
-  try {
-    const s = await chrome.storage.sync.get({ sites: {} });
-    const sites = { ...(s.sites || {}) };
-    if (mode === null) delete sites[host];   // null = 跟随全局
-    else sites[host] = mode;
-    await chrome.storage.sync.set({ sites });
-  } catch (e) {}
+// 一次处置的可比较标识：设置变了要靠它判断这一页要不要整页重来
+function planKey(plan) {
+  return plan.action + "|" + !!plan.preferNative + "|" + plan.method;
 }
 
 function detect() {
@@ -1123,8 +1052,8 @@ async function getStatus() {
   const settings = await readSettings();
   const host = hostKey();
   // localStorage 那一档切成功后会 reload，本次加载里没有任何 DOM 改动，
-  // 但页面确实是扩展翻浅的、也能撤销，所以照「已应用」报给 popup——
-  // 这样复用现成的「撤销」按钮，不用为它单独加控件。
+  // 但页面确实是扩展翻浅的，用户也能用「关闭本站」还原，所以照「已应用」报给 popup——
+  // 这样 popup 会显示本站已生效，并给出「关闭本站」这个还原入口。
   const undo = (await readUndoMap())[host];
   const undoActive = !!undo && !state.isDark;
   return {
@@ -1132,9 +1061,9 @@ async function getStatus() {
     isApplied: state.isApplied || undoActive,
     activeMode: state.isApplied ? state.activeMode : (undoActive ? "native" : null),
     host,
-    globalMode: settings.globalMode,
-    siteMode: isMode(settings.sites[host]) ? settings.sites[host] : null,   // null = 跟随全局
-    mode: resolveMode(settings, host),                                      // 本站实际生效的模式
+    global: settings.global,
+    site: settings.sites[host] || null,        // null = 跟随全局
+    plan: MODEL.resolveSetting(settings.global, settings.sites[host]),   // 这一页该怎么办
     hasNative: state.nativeSignals.length > 0 || !!state.lsSwitch,
     autoApplied: state.isApplied ? state.autoApplied : !!(undo && undo.auto),
   };
@@ -1142,28 +1071,29 @@ async function getStatus() {
 
 async function applyResolved(isAuto) {
   const settings = await readSettings();
-  const mode = resolveMode(settings, hostKey());
-  if (mode === "off") return;
-  await apply(mode, isAuto);
-  if (state.isApplied) state.autoApplied = isAuto;
+  const plan = MODEL.resolveSetting(settings.global, settings.sites[hostKey()]);
+  if (plan.action === "none") return;
+  // action === "force" 时不看检测结果：站点级是「断言」，你说了算
+  if (plan.action === "auto" && !state.isDark) return;
+  await apply(plan, isAuto);
 }
 
 async function autoApply() {
   if (window !== window.top) return;   // all_frames 会让每个 iframe 各跑一份，逐帧套滤镜只会套重
-  if (state.isApplied || !state.isDark) return;
+  if (state.isApplied) return;
   await applyResolved(true);
 }
 
 async function onSettingsChanged() {
   const settings = await readSettings();
-  const mode = resolveMode(settings, hostKey());
+  const plan = MODEL.resolveSetting(settings.global, settings.sites[hostKey()]);
 
   if (state.isApplied) {
-    // 已翻转的页面：模式变了就地改不了，整页重来；没变就保持现状
-    if (mode !== state.appliedMode) location.reload();
+    // 已翻转的页面：这一页的处置变了自己换不回来，整页重来；没变就保持现状
+    if (planKey(plan) !== state.appliedMode) location.reload();
     return;
   }
-  if (mode === "off") return;
+  if (plan.action === "none") return;
   detect();
   await applyResolved(true);
 }

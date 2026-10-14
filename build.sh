@@ -4,6 +4,7 @@ set -e
 
 FILES=(
   manifest.json
+  model.js
   content.js
   popup.html
   popup.js

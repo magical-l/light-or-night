@@ -9,48 +9,31 @@ function t(key, subs) {
 const statusBadge = document.getElementById("statusBadge");
 const appliedMethod = document.getElementById("appliedMethod");
 const modeSettings = document.getElementById("modeSettings");
-const settingsDivider = document.getElementById("settingsDivider");
-const globalModes = document.getElementById("globalModes");
+const globalSwitch = document.getElementById("globalSwitch");
+const globalOptions = document.getElementById("globalOptions");
+const globalMethods = document.getElementById("globalMethods");
+const globalPreferNative = document.getElementById("globalPreferNative");
 const siteSettings = document.getElementById("siteSettings");
-const siteCurrentLine = document.getElementById("siteCurrentLine");
+const siteSwitch = document.getElementById("siteSwitch");
 const siteHost = document.getElementById("siteHost");
-const siteExpandBtn = document.getElementById("siteExpandBtn");
-const siteModes = document.getElementById("siteModes");
-const actionBtn = document.getElementById("actionBtn");
-const validation = document.getElementById("validation");
-const valSummary = document.getElementById("valSummary");
-const valList = document.getElementById("valList");
+const siteOptions = document.getElementById("siteOptions");
+const siteMethods = document.getElementById("siteMethods");
+const sitePreferNative = document.getElementById("sitePreferNative");
+const sitePreferNativeRow = document.getElementById("sitePreferNativeRow");
 const info = document.getElementById("info");
 
-// 「翻转模式」是唯一的设置概念，取值域全局与本站共用（6 选 1）。
-// 本站多一个「跟随全局」，它不是取值之一，而是「不写进 sites」。
-const MODE_LABEL_KEYS = {
-  off: "modeOff",
-  native: "modeNativeOnly",
-  filter: "modeFilterOnly",
-  remap: "modeRemapOnly",
-  "native-filter": "modeNativeFilter",
-  "native-remap": "modeNativeRemap",
-};
 // 「已用」那一行只报页面实际用了哪个方法（native / filter / remap）
 const METHOD_NAME_KEYS = {
-  native: "modeNativeName",
-  filter: "modeFilterName",
-  remap: "modeRemapName",
+  native: "methodNative",
+  filter: "methodFilter",
+  remap: "methodRemap",
 };
-const SITE_FOLLOW = "follow-global";
-
+// 本站手段里「跟随全局」这一档：含义是删掉 sites[host]，不是某个取值
+const SITE_FOLLOW = "follow";
 let currentTab = null;
-let siteExpanded = false;
-
-function isMode(value) {
-  return Object.prototype.hasOwnProperty.call(MODE_LABEL_KEYS, value);
-}
-
-function modeLabel(mode) {
-  const key = MODE_LABEL_KEYS[mode];
-  return key ? t(key) : "";
-}
+let currentHost = "";
+let currentGlobal = MODEL.DEFAULT_GLOBAL;
+let currentSite = null;   // null = 跟随全局
 
 function methodName(method) {
   const key = METHOD_NAME_KEYS[method];
@@ -75,13 +58,32 @@ function sendToTab(action, extra) {
 }
 
 // 全局设置跟当前页无关：连不上内容脚本时直接从 storage 兜底读
-async function readGlobalMode() {
+async function readGlobalSetting() {
   try {
-    const s = await chrome.storage.sync.get({ globalMode: "native" });
-    return isMode(s.globalMode) ? s.globalMode : "native";
+    const s = await chrome.storage.sync.get({ global: null });
+    return MODEL.normalizeSetting(s.global) || MODEL.DEFAULT_GLOBAL;
   } catch (e) {
-    return "native";
+    return MODEL.DEFAULT_GLOBAL;
   }
+}
+
+async function writeGlobalSetting(next) {
+  try {
+    await chrome.storage.sync.set({ global: next });
+  } catch (e) {}
+  await notifySettingsChanged();
+}
+
+// 写本站覆盖：null = 跟随全局（删掉这个键），对象 = 本站自己的断言
+async function writeSiteSetting(next) {
+  try {
+    const s = await chrome.storage.sync.get({ sites: {} });
+    const sites = { ...(s.sites || {}) };
+    if (next === null) delete sites[currentHost];
+    else sites[currentHost] = next;
+    await chrome.storage.sync.set({ sites });
+  } catch (e) {}
+  await notifySettingsChanged();
 }
 
 function setRadioGroup(container, value) {
@@ -95,14 +97,16 @@ function setRadioGroup(container, value) {
 
 async function renderStatus(status) {
   modeSettings.style.display = "block";
-  settingsDivider.style.display = "block";
 
-  // 全局模式组与当前页无关，任何分支都显示
-  let globalMode = status.error ? null : status.globalMode;
-  if (!isMode(globalMode)) globalMode = await readGlobalMode();
-  setRadioGroup(globalModes, globalMode);
+  // 全局设置与当前页无关；读不到状态时用 storage 兜底，两组照常渲染
+  currentGlobal = (status.error || !status.global)
+    ? await readGlobalSetting()
+    : status.global;
+  currentHost = status.error ? "" : (status.host || "");
+  currentSite = status.error ? null : (status.site || null);
 
-  renderSite(status);
+  renderGlobal(currentGlobal);
+  renderSite();
 
   // 徽章常驻描述页面明暗（扩展动手前采到的 isDark），与是否已应用无关；
   // 「用了什么方法」另起一行，不替代徽章。
@@ -113,8 +117,6 @@ async function renderStatus(status) {
   if (status.error) {
     statusBadge.textContent = t("cannotAccessPage");
     statusBadge.className = "status light";
-    actionBtn.style.display = "none";
-    validation.style.display = "none";
     info.textContent = t("cannotRunHere");
     return;
   }
@@ -126,78 +128,95 @@ async function renderStatus(status) {
     statusBadge.textContent = t("lightPage");
     statusBadge.className = "status light";
   }
+  info.textContent = "";
 
   if (status.isApplied) {
-    actionBtn.style.display = "block";
-    actionBtn.disabled = false;
-    actionBtn.onclick = handleRemove;
     appliedMethod.textContent = t("appliedMethod", [methodName(status.activeMode)]);
     appliedMethod.style.display = "block";
-    info.textContent = "";
-    if (status.activeMode === "remap") runValidation();
-    else validation.style.display = "none";
-    return;
   }
-
-  actionBtn.style.display = "none";
-  validation.style.display = "none";
-  info.textContent = status.isDark ? "" : t("lightPageHint");
 }
 
-// 本站行：只有拿得到 host 才显示；看不到 host 时只藏这一行，全局那组保留
-function renderSite(status) {
-  const host = status.error ? "" : (status.host || "");
-  if (!host) {
+// 全局组：开关 = global.enabled，关掉时收起下面的选项
+function renderGlobal(global) {
+  globalSwitch.classList.toggle("on", global.enabled);
+  globalSwitch.setAttribute("aria-label", global.enabled ? t("switchOn") : t("switchOff"));
+  globalSwitch.setAttribute("aria-pressed", String(global.enabled));
+  globalOptions.style.display = global.enabled ? "block" : "none";
+  setRadioGroup(globalMethods, global.method);
+  globalPreferNative.checked = global.preferNative;
+}
+
+// 本站组：开关表示"这一站按不按扩展的处置走"，取「跟随全局」时是开的
+function renderSite() {
+  if (!currentHost) {
     siteSettings.style.display = "none";
-    siteCurrentLine.textContent = "";
-    siteHost.textContent = "";
     return;
   }
   siteSettings.style.display = "block";
-  siteHost.textContent = host;
+  siteHost.textContent = currentHost;
 
-  // 本站生效模式 = 本站覆盖值；siteMode === null 表示跟随全局
-  if (status.siteMode == null) {
-    siteCurrentLine.textContent = t("siteFollowCurrent", [modeLabel(status.mode)]);
-  } else {
-    siteCurrentLine.textContent = modeLabel(status.siteMode);
+  const following = currentSite === null;             // 「跟随全局」＝存储里没这个键
+  const siteOn = following ? true : currentSite.enabled;
+
+  siteSwitch.classList.toggle("on", siteOn);
+  siteSwitch.setAttribute("aria-label", siteOn ? t("switchOn") : t("switchOff"));
+  siteSwitch.setAttribute("aria-pressed", String(siteOn));
+  siteOptions.style.display = siteOn ? "block" : "none";
+
+  setRadioGroup(siteMethods, following ? SITE_FOLLOW : currentSite.method);
+
+  // 跟随全局时只把「优先尝试原生」置灰（显示全局的值）；两个手段 radio 始终可点，
+  // 点任一档即写死本站手段——这是用户从「跟随全局」走出来的唯一出口。
+  sitePreferNativeRow.classList.toggle("disabled", following);
+  sitePreferNative.disabled = following;
+  sitePreferNative.checked = following ? currentGlobal.preferNative : currentSite.preferNative;
+}
+
+// 全局开关：关掉只把 global.enabled 置 false，其余字段原样保留
+async function handleGlobalSwitch() {
+  await writeGlobalSetting({ ...currentGlobal, enabled: !currentGlobal.enabled });
+}
+
+async function handleGlobalMethod(e) {
+  const value = e.target.value;
+  if (!MODEL.isMethod(value)) return;
+  await writeGlobalSetting({ ...currentGlobal, method: value });
+}
+
+async function handleGlobalPreferNative() {
+  await writeGlobalSetting({ ...currentGlobal, preferNative: globalPreferNative.checked });
+}
+
+// 本站开关：关掉 = 断言「本站别动」，写 enabled:false；手段与原生以本站已存值
+// 为准（没设过本站才拿全局兜底），再通知内容脚本还原本站 localStorage 并重载。
+// 从关闭再打开 = 沿用本站已存的手段与原生偏好。
+async function handleSiteSwitch() {
+  const following = currentSite === null;
+  const siteOn = following ? true : currentSite.enabled;
+  if (siteOn) {
+    const base = currentSite || { preferNative: currentGlobal.preferNative, method: currentGlobal.method };
+    await writeSiteSetting({ ...base, enabled: false });
+    await sendToTab("stopSite");
+    return;
   }
-  setRadioGroup(siteModes, status.siteMode == null ? SITE_FOLLOW : status.siteMode);
-
-  siteModes.style.display = siteExpanded ? "flex" : "none";
-  siteExpandBtn.textContent = siteExpanded ? t("collapse") : t("change");
+  await writeSiteSetting({ ...currentSite, enabled: true });
 }
 
-function toggleSiteExpanded() {
-  siteExpanded = !siteExpanded;
-  siteModes.style.display = siteExpanded ? "flex" : "none";
-  siteExpandBtn.textContent = siteExpanded ? t("collapse") : t("change");
-}
-
-// 改全局模式 = 写 globalMode
-async function handleGlobalChange(e) {
+// 本站手段：「跟随全局」= 删掉这个键，其余 = 本站写死一个方法
+async function handleSiteMethod(e) {
   const value = e.target.value;
-  if (!isMode(value)) return;
-  try {
-    await chrome.storage.sync.set({ globalMode: value });
-  } catch (err) {}
-  await notifySettingsChanged();
+  if (value === SITE_FOLLOW) {
+    await writeSiteSetting(null);
+    return;
+  }
+  if (!MODEL.isMethod(value)) return;
+  const preferNative = currentSite ? currentSite.preferNative : currentGlobal.preferNative;
+  await writeSiteSetting({ enabled: true, preferNative, method: value });
 }
 
-// 改本站模式：「跟随全局」= 删掉 sites[host]，其余 6 个值 = 写 sites[host]
-async function handleSiteChange(e) {
-  const value = e.target.value;
-  if (value !== SITE_FOLLOW && !isMode(value)) return;
-  const status = await sendToTab("getStatus");
-  if (status.error || !status.host) return;
-  try {
-    const s = await chrome.storage.sync.get({ sites: {} });
-    const sites = { ...(s.sites || {}) };
-    if (value === SITE_FOLLOW) delete sites[status.host];
-    else sites[status.host] = value;
-    await chrome.storage.sync.set({ sites });
-  } catch (err) {}
-  await notifySettingsChanged();
+async function handleSitePreferNative() {
+  if (currentSite === null) return;   // 跟随全局时这一项只读
+  await writeSiteSetting({ ...currentSite, preferNative: sitePreferNative.checked });
 }
 
 // 写完设置后通知当前页重新决策，再拉一次真实状态重绘
@@ -207,71 +226,15 @@ async function notifySettingsChanged() {
   await renderStatus(status);
 }
 
-// 「撤销，并不再翻转本站」：content.js 的 remove 会把本站设为关闭并恢复本页
-async function handleRemove() {
-  actionBtn.disabled = true;
-  await sendToTab("remove");
-  const status = await sendToTab("getStatus");
-  await renderStatus(status);
-}
-
-async function runValidation() {
-  validation.style.display = "block";
-  valSummary.textContent = t("scanning");
-  valList.innerHTML = "";
-
-  const result = await sendToTab("validate");
-  if (result.error) {
-    valSummary.textContent = t("validationFailed");
-    return;
-  }
-
-  const critCount = result.issues.filter((i) => i.level === "critical").length;
-  const warnCount = result.issues.filter((i) => i.level === "warning").length;
-
-  if (result.issues.length === 0) {
-    valSummary.innerHTML =
-      `<span class="val-ok">${t("allPass", [String(result.checked)])}</span>`;
-  } else {
-    const parts = [t("passCount", [String(result.passed), String(result.checked)])];
-    if (critCount > 0) {
-      parts.push(
-        `<span class="val-crit">${t("criticalCount", [String(critCount)])}</span>`
-      );
-    }
-    if (warnCount > 0) {
-      parts.push(
-        `<span class="val-warn">${t("warningCount", [String(warnCount)])}</span>`
-      );
-    }
-    valSummary.innerHTML = parts.join(" &middot; ");
-  }
-
-  const sorted = result.issues.sort((a, b) => {
-    if (a.level !== b.level) return a.level === "critical" ? -1 : 1;
-    return a.ratio - b.ratio;
-  });
-
-  valList.innerHTML = sorted.map((issue) => `
-    <div class="val-item">
-      <span class="val-ratio ${issue.level === "critical" ? "val-crit" : "val-warn"}">${issue.ratio}:1</span>
-      &lt;${issue.tag}&gt;
-      <span class="val-text">"${escapeHtml(issue.text)}"</span>
-      <div class="val-colors">text: ${issue.textColor} &middot; bg: ${issue.bgColor}</div>
-    </div>
-  `).join("");
-}
-
-function escapeHtml(str) {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 // --- Init ---
 applyI18n();
 
-globalModes.addEventListener("change", handleGlobalChange);
-siteModes.addEventListener("change", handleSiteChange);
-siteExpandBtn.addEventListener("click", toggleSiteExpanded);
+globalSwitch.addEventListener("click", handleGlobalSwitch);
+globalMethods.addEventListener("change", handleGlobalMethod);
+globalPreferNative.addEventListener("change", handleGlobalPreferNative);
+siteSwitch.addEventListener("click", handleSiteSwitch);
+siteMethods.addEventListener("change", handleSiteMethod);
+sitePreferNative.addEventListener("change", handleSitePreferNative);
 
 chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
   currentTab = tab;

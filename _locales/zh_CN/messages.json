@@ -6,47 +6,17 @@
   "cannotRunHere": { "message": "无法在此页面运行（chrome://、扩展等）" },
   "darkPageDetected": { "message": "检测到深色页面" },
   "lightPage": { "message": "浅色页面" },
-  "lightPageHint": { "message": "页面看起来不是深色，但你可以强制转换" },
   "appliedMethod": {
     "message": "已用：$method$",
     "placeholders": { "method": { "content": "$1" } }
   },
-  "flipModeTitle": { "message": "翻转模式" },
-  "siteModeTitle": { "message": "本站模式" },
-  "change": { "message": "更改" },
-  "collapse": { "message": "收起" },
-  "modeOff": { "message": "关闭" },
-  "modeNativeOnly": { "message": "只用原生" },
-  "modeFilterOnly": { "message": "只用快速滤镜" },
-  "modeRemapOnly": { "message": "只用颜色映射" },
-  "modeNativeFilter": { "message": "原生优先，失败用快速滤镜" },
-  "modeNativeRemap": { "message": "原生优先，失败用颜色映射" },
-  "followGlobal": { "message": "跟随全局" },
-  "siteFollowCurrent": {
-    "message": "跟随全局 · 当前：$mode$",
-    "placeholders": { "mode": { "content": "$1" } }
-  },
-  "actionRemoveSite": { "message": "撤销，并不再翻转本站" },
-  "modeNativeName": { "message": "原生浅色" },
-  "modeFilterName": { "message": "快速滤镜" },
-  "modeRemapName": { "message": "颜色映射" },
-  "validationTitle": { "message": "对比度校验" },
-  "scanning": { "message": "扫描中..." },
-  "validationFailed": { "message": "校验失败" },
-  "allPass": {
-    "message": "全部 $count$ 个元素通过 WCAG AA",
-    "placeholders": { "count": { "content": "$1" } }
-  },
-  "passCount": {
-    "message": "$passed$/$checked$ 通过",
-    "placeholders": { "passed": { "content": "$1" }, "checked": { "content": "$2" } }
-  },
-  "criticalCount": {
-    "message": "$count$ 个严重（&lt;3:1）",
-    "placeholders": { "count": { "content": "$1" } }
-  },
-  "warningCount": {
-    "message": "$count$ 个警告（&lt;4.5:1）",
-    "placeholders": { "count": { "content": "$1" } }
-  }
+  "levelGlobal": { "message": "全局" },
+  "levelSite": { "message": "当前站点" },
+  "switchOn": { "message": "开启" },
+  "switchOff": { "message": "关闭" },
+  "methodFilter": { "message": "滤镜反转" },
+  "methodRemap": { "message": "颜色映射" },
+  "methodNative": { "message": "站点自带浅色" },
+  "preferNative": { "message": "优先尝试站点自带的浅色模式" },
+  "followGlobal": { "message": "跟随全局" }
 }
