@@ -28,10 +28,14 @@
     .settings { margin-top: 0; }
     .settings-group + .settings-group { margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee8d5; }
     .settings-title { font-size: 12px; font-weight: 600; color: #073642; margin-bottom: 6px; }
+    /* 「翻成」子标题：和下面的手段清单是另一个维度的设置，用更小更弱的字把它分出来 */
+    .settings-subtitle { font-size: 11px; font-weight: 600; color: #93a1a1; margin-bottom: 6px; }
     .settings-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .settings-head .settings-title { margin-bottom: 0; }
 
     .radio-list { display: flex; flex-direction: column; gap: 4px; }
+    /* 偏好那组后面还有手段清单，拉开一点免得两组看起来是一组 */
+    #globalPreference { margin-bottom: 10px; }
     .radio-row {
       display: flex; align-items: center; gap: 8px;
       padding: 6px 8px; border: 2px solid #eee8d5; border-radius: 6px;
@@ -43,6 +47,20 @@
     .radio-row input { flex: 0 0 auto; margin: 0; accent-color: #268bd2; }
     .radio-row.disabled { opacity: 0.45; cursor: default; }
     .radio-row.disabled:hover { border-color: #eee8d5; }
+
+    /* 偏好方向：一行三段的分段控件（.radio-list.inline），DOM 仍是 label > input */
+    .radio-list.inline { flex-direction: row; gap: 5px; }
+    .radio-list.inline .radio-row {
+      position: relative; flex: 1 1 auto; justify-content: center;
+      padding: 6px 4px; white-space: nowrap;
+    }
+    /* 圆点视觉隐藏但仍留在 DOM 里（可聚焦可点）——不用 display:none */
+    .radio-list.inline .radio-row input {
+      position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+    /* 圆点藏了之后，靠键盘焦点把当前段描出来（:has(input:focus-visible) 只在键盘焦点下命中，鼠标点击不描边） */
+    .radio-list.inline .radio-row:has(input:focus-visible) { outline: 2px solid #268bd2; outline-offset: 1px; }
 
     /* Level switch — a group is on/off from its title row */
     .switch {
@@ -84,6 +102,12 @@
         <button id="globalSwitch" class="switch" type="button"></button>
       </div>
       <div id="globalOptions">
+        <div class="settings-subtitle" data-i18n="preference">Preference</div>
+        <div id="globalPreference" class="radio-list inline">
+          <label class="radio-row" data-value="system"><input type="radio" name="globalPreference" value="system"><span id="preferSystemLabel"></span></label>
+          <label class="radio-row" data-value="light"><input type="radio" name="globalPreference" value="light"><span data-i18n="preferLight"></span></label>
+          <label class="radio-row" data-value="dark"><input type="radio" name="globalPreference" value="dark"><span data-i18n="preferDark"></span></label>
+        </div>
         <div id="globalMethods" class="radio-list">
           <label class="radio-row" data-value="filter"><input type="radio" name="globalMethod" value="filter"><span data-i18n="methodFilter"></span></label>
           <label class="radio-row" data-value="remap"><input type="radio" name="globalMethod" value="remap"><span data-i18n="methodRemap"></span></label>

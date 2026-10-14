@@ -1,11 +1,12 @@
 {
-  "extDesc": { "message": "自动把深色网页翻成浅色：站点自带浅色主题就切它，没有就上滤镜或颜色映射。可逐站点设置。" },
+  "extDesc": { "message": "自动把网页翻成你偏好的明暗：站点自带主题就切它，没有就上滤镜或颜色映射。可逐站点设置。" },
   "extName": { "message": "颠倒黑白" },
   "checking": { "message": "检查中..." },
   "cannotAccessPage": { "message": "无法访问页面" },
   "cannotRunHere": { "message": "无法在此页面运行（chrome://、扩展等）" },
-  "darkPageDetected": { "message": "检测到深色页面" },
-  "lightPage": { "message": "浅色页面" },
+  "darkPage": { "message": "本页为深色" },
+  "lightPage": { "message": "本页为浅色" },
+  "pageToneUnknown": { "message": "无法判断本页明暗" },
   "appliedMethod": {
     "message": "已用：$method$",
     "placeholders": { "method": { "content": "$1" } }
@@ -14,9 +15,18 @@
   "levelSite": { "message": "当前站点" },
   "switchOn": { "message": "开启" },
   "switchOff": { "message": "关闭" },
+  "preference": { "message": "偏好" },
+  "preferSystemNow": {
+    "message": "跟随系统（$dir$）",
+    "placeholders": { "dir": { "content": "$1" } }
+  },
+  "dirLight": { "message": "浅" },
+  "dirDark": { "message": "深" },
+  "preferLight": { "message": "浅色" },
+  "preferDark": { "message": "深色" },
   "methodFilter": { "message": "滤镜反转" },
   "methodRemap": { "message": "颜色映射" },
-  "methodNative": { "message": "站点自带浅色" },
-  "preferNative": { "message": "优先尝试站点自带的浅色模式" },
+  "methodNative": { "message": "站点自带主题" },
+  "preferNative": { "message": "优先尝试站点自带的主题切换" },
   "followGlobal": { "message": "跟随全局" }
 }

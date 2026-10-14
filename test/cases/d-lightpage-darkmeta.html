@@ -189,7 +189,7 @@
 			var SCENE = '<div class="card">' +
 				'<p><b>现状：</b>整页背景 <code>#fdf6e3</code>、深色文字，是彻底的浅色页；只有 <code>&lt;meta name="theme-color" content="#0a0a1a"&gt;</code> 是深色品牌色。</p>' +
 				'<p><b>期望：</b>扩展<b>不该</b>把它判定为深色页。</p>' +
-				'<p><b>若判定为深色：</b>说明判定逻辑只看 theme-color 就下结论，太松。detectDarkPage 会先读 meta 的 theme-color，一旦是深色就 return true，根本不管页面实际长什么样。</p>' +
+				'<p><b>若判定为深色：</b>说明判定逻辑采信了 <code>meta[theme-color]</code>——那是站点给浏览器 UI 配的品牌色，不代表页面长什么样。判定只该看画布底色（<code>firstPaintedBackground</code>）。</p>' +
 				'</div>';
 
 			document.title = DPIB_CASE + ' · DPIB 缺陷复现';

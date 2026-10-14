@@ -13,6 +13,8 @@ const globalSwitch = document.getElementById("globalSwitch");
 const globalOptions = document.getElementById("globalOptions");
 const globalMethods = document.getElementById("globalMethods");
 const globalPreferNative = document.getElementById("globalPreferNative");
+const globalPreference = document.getElementById("globalPreference");
+const preferSystemLabel = document.getElementById("preferSystemLabel");
 const siteSettings = document.getElementById("siteSettings");
 const siteSwitch = document.getElementById("siteSwitch");
 const siteHost = document.getElementById("siteHost");
@@ -40,6 +42,11 @@ function methodName(method) {
   return key ? t(key) : "";
 }
 
+// 「跟随系统」得让用户看见它当下解析成什么，先得知道系统现在是深是浅
+function systemPrefersDark() {
+  try { return window.matchMedia("(prefers-color-scheme: dark)").matches; } catch (e) { return false; }
+}
+
 // 静态文案由 data-i18n 标注，这里统一填充
 function applyI18n() {
   for (const el of document.querySelectorAll("[data-i18n]")) {
@@ -61,7 +68,7 @@ function sendToTab(action, extra) {
 async function readGlobalSetting() {
   try {
     const s = await chrome.storage.sync.get({ global: null });
-    return MODEL.normalizeSetting(s.global) || MODEL.DEFAULT_GLOBAL;
+    return MODEL.normalizeGlobal(s.global) || MODEL.DEFAULT_GLOBAL;
   } catch (e) {
     return MODEL.DEFAULT_GLOBAL;
   }
@@ -108,7 +115,7 @@ async function renderStatus(status) {
   renderGlobal(currentGlobal);
   renderSite();
 
-  // 徽章常驻描述页面明暗（扩展动手前采到的 isDark），与是否已应用无关；
+  // 徽章常驻描述页面明暗（扩展动手前采到的 pageTone），与是否已应用无关；
   // 「用了什么方法」另起一行，不替代徽章。
   appliedMethod.style.display = "none";
   appliedMethod.textContent = "";
@@ -121,11 +128,17 @@ async function renderStatus(status) {
     return;
   }
 
-  if (status.isDark) {
-    statusBadge.textContent = t("darkPageDetected");
+  // 徽章只描述页面本身，与用户偏好无关；pageTone 三态里 unknown 是"采不到底"
+  // ——body/html 都没画底，查不到屏幕上到底是什么。这一态不能硬报成浅色，那是在编。
+  if (status.pageTone === "dark") {
+    statusBadge.textContent = t("darkPage");
     statusBadge.className = "status dark";
-  } else {
+  } else if (status.pageTone === "light") {
     statusBadge.textContent = t("lightPage");
+    statusBadge.className = "status light";
+  } else {
+    // unknown 或缺字段：复用灰底样式，不新增 CSS 类
+    statusBadge.textContent = t("pageToneUnknown");
     statusBadge.className = "status light";
   }
   info.textContent = "";
@@ -143,6 +156,9 @@ function renderGlobal(global) {
   globalSwitch.setAttribute("aria-pressed", String(global.enabled));
   globalOptions.style.display = global.enabled ? "block" : "none";
   setRadioGroup(globalMethods, global.method);
+  setRadioGroup(globalPreference, global.preference);
+  // 「跟随系统」这档当下解析成浅还是深，直接写在按钮文字的括号里
+  preferSystemLabel.textContent = t("preferSystemNow", [t(systemPrefersDark() ? "dirDark" : "dirLight")]);
   globalPreferNative.checked = global.preferNative;
 }
 
@@ -185,6 +201,12 @@ async function handleGlobalMethod(e) {
 
 async function handleGlobalPreferNative() {
   await writeGlobalSetting({ ...currentGlobal, preferNative: globalPreferNative.checked });
+}
+
+async function handleGlobalPreference(e) {
+  const value = e.target.value;
+  if (!MODEL.isPreference(value)) return;
+  await writeGlobalSetting({ ...currentGlobal, preference: value });
 }
 
 // 本站开关：关掉 = 断言「本站别动」，写 enabled:false；手段与原生以本站已存值
@@ -232,6 +254,7 @@ applyI18n();
 globalSwitch.addEventListener("click", handleGlobalSwitch);
 globalMethods.addEventListener("change", handleGlobalMethod);
 globalPreferNative.addEventListener("change", handleGlobalPreferNative);
+globalPreference.addEventListener("change", handleGlobalPreference);
 siteSwitch.addEventListener("click", handleSiteSwitch);
 siteMethods.addEventListener("change", handleSiteMethod);
 sitePreferNative.addEventListener("change", handleSitePreferNative);

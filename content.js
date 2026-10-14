@@ -61,14 +61,39 @@ const NEUTRAL_STEPS = [[0.004, 97], [0.006, 94], [0.009, 91], [0.013, 88], [0.02
 // 底带彩时不用它——那时正文要跟底色同色相，见 remapText。
 const INK = [62, 83, 90];
 
+// --- 深色方向的目标色 ---
+// 与上面那套完全同构，锚点换成 Solarized 的深色底 base03（上面那套锚的是浅色底 base3）。
+// 不是把上面那套取反算出来的：相对亮度在暗端不线性，纯 L* 镜像出来的几档过不了 WCAG AA，
+// 所以每个值都单独复算过，理由写在各自下面。
+const BASE_HUE_DARK = hueOf(SOL.base03), BASE_CHROMA_DARK = chromaOf(SOL.base03);
+// 中性亮底落到一条深色梯级：最亮的输入（白画布）翻到 base03 那一带，越亮的输入翻得越深。
+// 和浅色那条一样按**亮度**分档，但门槛全挤在高位——浅色页的背景都落在 L* 90~100（相对亮度 0.78~1）。
+// 最后那档 0.17 是兜底：比它亮的都算「浅色页上的中性面」，位置对应浅色那条的 0.2。
+const NEUTRAL_STEPS_DARK = [[0.98, 16], [0.94, 19], [0.90, 22], [0.85, 25], [0.78, 28], [0.17, 30]];
+
+const TINT_DARK = {
+  // 色块：浅色那档 L*84 比奶油底低 13。深色页上色块要比页面底**亮**，所以是 28（比 base03 高 13）。
+  surface: { L: 28, C: 25 },
+  // 文字：L*34 的纯 L* 镜像是 66，但 L*66 压在 L*30 的中性面上只有 3.6:1、过不了 AA——
+  // 镜像不保对比度。抬到 74 之后，中性梯级最浅那档上 4.59:1、色块上 4.93:1，两处都过。
+  text:    { L: 74, C: 30 },
+  // 边框：浅色那档 L*70 在奶油底上 2.13:1、在色块上 1.51:1。这一档按**对比度**镜像（不是按 L*），
+  // 同样两个比值定出 L*38~40，取 40。
+  border:  { L: 40, C: 18 },
+};
+// 深色中性底上的正文色。同 INK 的色相、明度取 L*74（与 TINT_DARK.text 同一个理由）。
+// 压在中性梯级最浅那档（L*30）上 4.59:1、最深那档（L*16）上 7.31:1。
+const INK_DARK = [163, 186, 194];
+
 // --- State ---
 
 let state = {
-  isDark: false,
+  pageTone: "unknown",    // 这一页画布的深浅："dark" | "light" | "unknown"（还没测时是 unknown）
+  preferDark: false,      // 这一页最终要翻成深色吗（偏好 + 系统偏好的解析结果）
   isApplied: false,
   activeMode: null,       // "native" | "filter" | "remap"
   nativeSignals: [],
-  lsSwitch: null,         // 站点把主题存在 localStorage 时的浅色值（最后手段那一档）
+  lsSwitch: null,         // 站点把主题存在 localStorage 时的目标值（最后手段那一档）
   appliedMode: null,      // 本次生效的那次处置（设置一变要判断是否重来）
   autoApplied: false,     // 当前这次应用是自动生效的，还是用户手点的
   applying: false,        // native 的切换+验证是异步的，用它挡住并发重入
@@ -76,7 +101,7 @@ let state = {
 let observer = null;
 const OBSERVER_CONFIG = {
   childList: true, subtree: true, attributes: true,
-  attributeFilter: ["class", "style", "src", "srcset"],
+  attributeFilter: ["class", "style"],
 };
 // 整页滤镜 + 图片反向滤镜用的是同一个值，所以它**必须是对合的**（F(F(x)) = x）。
 // invert(100%) 与 hue-rotate(180deg) 各自对合、且可交换，所以这个组合是；
@@ -118,7 +143,6 @@ function luminance([r, g, b]) {
 
 function toCSS([r, g, b]) { return `rgb(${r}, ${g}, ${b})`; }
 function isDark(rgb) { return luminance(rgb) < 0.2; }
-function luminanceQuick(r, g, b) { return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255; }
 function contrastRatio(l1, l2) { return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); }
 
 // CIELAB（D65）。选这个空间有两个理由：L* 只由相对亮度决定（WCAG 的对比度也是按相对亮度算的），
@@ -199,26 +223,37 @@ function firstPaintedBackground(el) {
   return null;
 }
 
-function detectDarkPage() {
+// 这一页的深浅：深 / 浅 / **判不出**。只回答「画布是什么」，不回答「该不该动手」——那是 resolveSetting 的事。
+// 「判不出」是一个**独立的答案**，不是「浅色」：body 和 html 都没画底时，样式里查不到屏幕上到底是什么
+// （可能是浏览器默认的白，也可能是一张铺满的背景图），没有依据就不该报结论。
+// 早先这里返回布尔值，判不出被压成「浅色」——popup 于是会对着一个毫无依据的页面说「浅色页面」；
+// 而「切完复测」那道闸也会把判不出当成「已经变浅了」而假成功。
+const TONE_DARK = "dark", TONE_LIGHT = "light", TONE_UNKNOWN = "unknown";
+
+function detectPageTone() {
   // 整站深浅以画布为准：body 沿祖先向上第一个画了底的元素，其底色就是站点底色。
   const pageBg = firstPaintedBackground(document.body);
-  // 画布没画底就不动 —— 宁可不动，也不猜。没有依据时猜错的方向是把浅色页翻黑。
-  if (!pageBg) return false;
-  return isDark(pageBg);
+  if (!pageBg) return TONE_UNKNOWN;
+  return isDark(pageBg) ? TONE_DARK : TONE_LIGHT;
 }
+
+// 偏好落到「这一页该是什么色调」
+function toneFor(preferDark) { return preferDark ? TONE_DARK : TONE_LIGHT; }
 
 // =============================================================================
 // MODE 1: NATIVE THEME DETECTION & SWITCH
 // =============================================================================
 
 const DARK_WORD_RE = /dark|night|dim|black/i;
+const LIGHT_WORD_RE = /light|day|bright|white/i;
 const DARK_LIGHT_WORDS = [["dark", "light"], ["night", "day"], ["dim", "bright"], ["black", "white"]];
 const THEME_LS_KEYS = ["theme", "color-theme", "colorMode", "color-mode", "darkMode",
   "dark-mode", "data-theme", "night-mode", "appearance", "colorScheme", "color-scheme"];
 
-// ---------- 站点浅色开关的发现 ----------
-// 不硬写 "light"：去站点自己的样式表里找它真正定义过的浅色值。
-// 找不到就宁可不动——写一个站点不认识的 "light" 会把它切进无样式状态。
+// ---------- 站点主题开关的发现 ----------
+// 不硬写 "light" / "dark"：去站点自己的样式表里找它真正定义过的那个值。
+// 找不到就宁可不动——写一个站点不认识的值会把它切进无样式状态。
+// 两个方向的差别只有一处：站点**当前**那一端是深色词还是浅色词（翻深时站点是浅色）。
 
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -231,14 +266,32 @@ function matchCase(sample, word) {
   return word;
 }
 
-// "nv-dark" → ["nv-light"]；"night" → ["day"]
-function lightCounterparts(value) {
+// 词形表是**成对**的，往哪个方向翻就取哪一端。
+// toDark=false（翻浅）："nv-dark" → ["nv-light"]、"night" → ["day"]
+// toDark=true （翻深）："nv-light" → ["nv-dark"]、"day" → ["night"]
+function counterparts(value, toDark) {
   const out = [];
   for (const [dark, light] of DARK_LIGHT_WORDS) {
-    if (!new RegExp(dark, "i").test(value)) continue;
-    out.push(value.replace(new RegExp(dark, "gi"), (m) => matchCase(m, light)));
+    const from = toDark ? light : dark;
+    const to = toDark ? dark : light;
+    if (!new RegExp(from, "i").test(value)) continue;
+    out.push(value.replace(new RegExp(from, "gi"), (m) => matchCase(m, to)));
   }
   return out;
+}
+
+// 这个词在类名里是不是一个**独立的词**：b_dark / theme-dark / darkMode ✓，lightbox / highlight / darkened ✗。
+// 类名里随手出现 dark/light 的其它词很多（lightbox 库就往 body 上挂 lightbox-open），
+// 不卡这一层，兜底那条「摘掉这个类」会把不相干的类删掉。
+// 边界：前面是串首或非字母数字；后面是串尾或非小写字母数字（大写算边界，好让 camelCase 也认）。
+function hasThemeWordToken(s, toDark) {
+  const lower = s.toLowerCase();
+  for (const [dark, light] of DARK_LIGHT_WORDS) {
+    const w = escapeRegExp(toDark ? light : dark);
+    if (new RegExp("(?:^|[^A-Za-z0-9])" + w + "(?=$|[^a-z0-9])").test(s)) return true;
+    if (new RegExp("(?:^|[^A-Za-z0-9])" + w + "(?=$|[^A-Za-z0-9])").test(lower)) return true;
+  }
+  return false;
 }
 
 // 站点全部选择器文本（含 @media / @supports 里嵌的）
@@ -269,53 +322,61 @@ function selectorAttrValues(selectorText, attr) {
   return Array.from(found);
 }
 
-// 先按词形对应找（night 该配 day，而不是随便一个 light），找不到再退到该属性定义过的其它非深色值。
+// 先按词形对应找（night 该配 day，而不是随便一个 light），找不到再退到该属性定义过的其它「目标端」值。
 // 顺序不能反：「站点自己那套命名」比「通用词 light」更可信——站点可能给别的组件另定义了一份 light。
-function resolveLightValue(darkValue, definedValues) {
-  for (const alt of lightCounterparts(darkValue)) {
+function resolveCounterpartValue(value, definedValues, toDark) {
+  for (const alt of counterparts(value, toDark)) {
     if (definedValues.indexOf(alt) !== -1) return alt;
   }
-  const others = definedValues.filter((v) => v !== darkValue && !DARK_WORD_RE.test(v) && !/^auto$/i.test(v));
-  return others.find((v) => /^light$/i.test(v)) || others.find((v) => /^day$/i.test(v)) || others[0] || null;
+  const curRe = toDark ? LIGHT_WORD_RE : DARK_WORD_RE;   // 要排除的是「站点当前那一端」的词
+  const others = definedValues.filter((v) => v !== value && !curRe.test(v) && !/^auto$/i.test(v));
+  const preferred = toDark ? [/^dark$/i, /^night$/i] : [/^light$/i, /^day$/i];
+  return others.find((v) => preferred[0].test(v)) || others.find((v) => preferred[1].test(v)) || others[0] || null;
 }
 
-// 返回的开关按「站点自己定义过的浅色值」来定，不写死字符串。
+// 返回的开关按「站点自己定义过的目标端取值」来定，不写死字符串。
 // 不扫 @media (prefers-color-scheme)：那种站点没有可切的东西，插 <meta name="color-scheme">
 // 对媒体查询毫无作用（实测：color-scheme 影响不了 prefers-color-scheme 的匹配）。
-function detectNativeThemeSupport() {
+function detectNativeThemeSupport(preferDark) {
   const signals = [];
   const html = document.documentElement;
   const body = document.body;
   const selectorText = collectSelectorText();
   const taken = new Set();   // "tag|attr" 去重：GitHub 那条和下面的通用循环会撞
+  // 站点当前那一端：翻深时它是浅色、翻浅时它是深色。所有「认出站点主题」的判断都按这一端来。
+  const curRe = preferDark ? LIGHT_WORD_RE : DARK_WORD_RE;
 
-  // A. GitHub 式：data-color-mode 是开关，data-light-theme 存的就是站点自己的浅色主题名
+  // A. GitHub 式：data-color-mode 是开关，data-light-theme / data-dark-theme 存的是站点自己的主题名
   const colorMode = html.getAttribute("data-color-mode");
-  const lightTheme = html.getAttribute("data-light-theme");
-  if (colorMode && lightTheme && (DARK_WORD_RE.test(colorMode) || /^auto$/i.test(colorMode))) {
-    signals.push({ type: "data-attr", el: "html", attr: "data-color-mode", from: colorMode, to: lightTheme });
+  const themeName = html.getAttribute(preferDark ? "data-dark-theme" : "data-light-theme");
+  if (colorMode && themeName && (curRe.test(colorMode) || /^auto$/i.test(colorMode))) {
+    signals.push({ type: "data-attr", el: "html", attr: "data-color-mode", from: colorMode, to: themeName });
     taken.add("html|data-color-mode");
   }
 
   for (const [tag, el] of [["html", html], ["body", body]]) {
     if (!el) continue;
 
-    // B. 类名：html/body 上任何带深色词的类，去找站点定义过的浅色对应类
-    //    （nv-dark → nv-light 走这条；类名正好是 dark 且站点没定义对应类时，退回「摘掉」）
+    // B. 类名：html/body 上任何带「站点当前那一端」词的类，去找站点定义过的对应类
+    //    （翻浅时 nv-dark → nv-light 走这条）
     for (const cls of Array.from(el.classList)) {
-      if (!DARK_WORD_RE.test(cls)) continue;
-      const alt = lightCounterparts(cls).find((v) => selectorMentionsClass(selectorText, v));
-      if (alt) signals.push({ type: "class-replace", el: tag, from: cls, to: alt });
-      else if (/^dark$/i.test(cls)) signals.push({ type: "class-remove", el: tag, className: cls });
+      if (!hasThemeWordToken(cls, preferDark)) continue;
+      const alt = counterparts(cls, preferDark).find((v) => selectorMentionsClass(selectorText, v));
+      if (alt) { signals.push({ type: "class-replace", el: tag, from: cls, to: alt }); continue; }
+      // 找不到对应类时退到「摘掉」：站点靠「挂上这个类」表示当前这一端，摘掉就回到另一端
+      // —— 但只有**站点自己给这个类写过样式**才认，那是「它是主题钩子」的证据，不是随手挂的工具类。
+      // 判据不能只看类名（别写死 dark / night / black）：bing 用的是 b_dark，而它压根没定义 .b_light，
+      // 按名字写死的话这条兜底永远不触发，整条原生路径静默失效。
+      if (selectorMentionsClass(selectorText, cls)) signals.push({ type: "class-remove", el: tag, className: cls });
     }
 
-    // C. data-* 属性：属性名得像主题开关，值得含深色词
+    // C. data-* 属性：属性名得像主题开关，值要带「站点当前那一端」的词
     for (const attr of Array.from(el.attributes)) {
       if (!/^data-/.test(attr.name)) continue;
       if (!/theme|mode|color|scheme|appearance/i.test(attr.name)) continue;
-      if (!DARK_WORD_RE.test(attr.value)) continue;
+      if (!curRe.test(attr.value)) continue;
       if (taken.has(tag + "|" + attr.name)) continue;
-      const to = resolveLightValue(attr.value, selectorAttrValues(selectorText, attr.name));
+      const to = resolveCounterpartValue(attr.value, selectorAttrValues(selectorText, attr.name), preferDark);
       if (!to) continue;
       signals.push({ type: "data-attr", el: tag, attr: attr.name, from: attr.value, to });
       taken.add(tag + "|" + attr.name);
@@ -380,19 +441,21 @@ const VERIFY_DELAYS = [0, 120, 400, 900];
 
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
-// 站点重渲染要时间，所以分几次采样：只要有一次不再算深色就算切成功。
-async function verifyBecameLight() {
+// 站点重渲染要时间，所以分几次采样：只要有一次页面已经变成了偏好色就算切成功。
+// preferDark 由调用方传，不读 state——「切完变成什么」是这一次切换的目标，不是全局状态。
+async function verifyBecamePreference(preferDark) {
   let waited = 0;
   for (const at of VERIFY_DELAYS) {
     if (at > waited) { await delay(at - waited); waited = at; }
-    if (!detectDarkPage()) return true;
+    // 判不出（unknown）不算成功：这一轮采样继续等，四轮都等不到就认失败、把 DOM 改回去
+    if (detectPageTone() === toneFor(preferDark)) return true;
   }
   return false;
 }
 
 // ---------- localStorage 这一档（最后手段） ----------
 // 它是唯一会永久写进站点自己存储的一档，而且必须 reload 才能生效，
-// 所以：只在 DOM 层一点可切的都没有时才走；先记原值；下次加载时若页面仍未变浅就写回去。
+// 所以：只在 DOM 层一点可切的都没有时才走；先记原值；下次加载时若页面仍未变成偏好色就写回去。
 
 const LS_TRIAL_KEY = "dpib-ls-trial";
 const LS_FAILED_KEY = "dpib-ls-failed";
@@ -401,12 +464,13 @@ function sessionGet(key) { try { return sessionStorage.getItem(key); } catch (e)
 function sessionSet(key, val) { try { sessionStorage.setItem(key, val); } catch (e) {} }
 function sessionDel(key) { try { sessionStorage.removeItem(key); } catch (e) {} }
 
-function discoverLocalStorageSwitch() {
+function discoverLocalStorageSwitch(preferDark) {
+  const curRe = preferDark ? LIGHT_WORD_RE : DARK_WORD_RE;
   for (const key of THEME_LS_KEYS) {
     let value = null;
     try { value = localStorage.getItem(key); } catch (e) { continue; }
-    if (!value || !DARK_WORD_RE.test(value)) continue;
-    const to = lightCounterparts(value).find((v) => v !== value);
+    if (!value || !curRe.test(value)) continue;
+    const to = counterparts(value, preferDark).find((v) => v !== value);
     if (to) return { key, from: value, to };
   }
   return null;
@@ -416,8 +480,9 @@ async function readUndoMap() {
   try { const s = await chrome.storage.sync.get({ lsUndo: {} }); return s.lsUndo || {}; } catch (e) { return {}; }
 }
 
-// 结算上一次的试验：页面变浅了算成功，把原值记进 lsUndo，关掉本站时好把站点自己的主题值还回去；
-// 没变浅就把原值写回、记下本站已失败（本标签页不再重试）。
+// 结算上一次的试验：页面变成偏好色了算成功，把原值记进 lsUndo，关掉本站时好把站点自己的主题值还回去；
+// 没变成就把原值写回、记下本站已失败（本标签页不再重试）。
+// 比的是 trial 里记下的那一端（state.preferDark 这时还没算出来，这次加载的检测在后面）。
 async function settleLocalStorageTrial() {
   const raw = sessionGet(LS_TRIAL_KEY);
   if (!raw) return;
@@ -426,7 +491,7 @@ async function settleLocalStorageTrial() {
   try { trial = JSON.parse(raw); } catch (e) { return; }
   if (trial.host !== hostKey()) return;
 
-  if (!detectDarkPage()) {
+  if (detectPageTone() === toneFor(!!trial.preferDark)) {
     try {
       const map = await readUndoMap();
       map[trial.host] = { key: trial.key, original: trial.original, auto: !!trial.auto };
@@ -458,19 +523,19 @@ async function tryLocalStorageSwitch(isAuto) {
   if (sessionGet(LS_FAILED_KEY) === host) return false;
   const map = await readUndoMap();
   if (map[host]) return false;                    // 本站已经改过一次并生效了，别反复写
-  const sw = discoverLocalStorageSwitch();
+  const sw = discoverLocalStorageSwitch(state.preferDark);
   if (!sw) return false;
-  sessionSet(LS_TRIAL_KEY, JSON.stringify({ host, key: sw.key, original: sw.from, auto: !!isAuto }));
+  sessionSet(LS_TRIAL_KEY, JSON.stringify({ host, key: sw.key, original: sw.from, preferDark: state.preferDark, auto: !!isAuto }));
   try { localStorage.setItem(sw.key, sw.to); } catch (e) { sessionDel(LS_TRIAL_KEY); return false; }
   location.reload();
   return true;
 }
 
-// 切换 + 验证：没真的变浅就当没切过，把 DOM 改回去，别把站点留在坏状态
+// 切换 + 验证：没真的变成偏好色就当没切过，把 DOM 改回去，别把站点留在坏状态
 async function applyNative(isAuto) {
   if (state.nativeSignals.length) {
     applyNativeSwitch(state.nativeSignals);
-    if (await verifyBecameLight()) return true;
+    if (await verifyBecamePreference(state.preferDark)) return true;
     revertNativeSwitch();
   }
   return tryLocalStorageSwitch(isAuto);
@@ -488,62 +553,16 @@ function applyFilterMode() {
     html {
       filter: ${SOLARIZE_FILTER} !important;
     }
-    /* Counter-filter: restore original appearance for media */
-    img:not([data-dpib-dark]),
+    /* 媒体一律用反向滤镜还原成本来的样子：整页滤镜 + 这一层是恒等，照片/视频/canvas 永远不动。
+       没有例外——「深色图也翻过来」那条例外会把照片做成负片，那是这条规则唯一不能接受的输出。
+       不列 <picture>：它自己不生成盒子、里面的 <img> 已经被这一条覆盖，列上反而多一层二次过滤的风险。 */
+    img,
     video,
-    canvas,
-    picture:not([data-dpib-dark]) {
+    canvas {
       filter: ${SOLARIZE_FILTER} !important;
-    }
-    /* Dark images stay inverted (no counter-filter) */
-    img[data-dpib-dark],
-    picture[data-dpib-dark] {
-      filter: none !important;
     }
   `;
   document.head.appendChild(style);
-  classifyImagesForFilter();
-}
-
-function classifyImagesForFilter() {
-  for (const img of document.querySelectorAll("img")) {
-    classifySingleImage(img);
-  }
-  // Lazy-load observer
-  if ("IntersectionObserver" in window) {
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        if (!e.isIntersecting) continue;
-        io.unobserve(e.target);
-        const img = e.target;
-        if (img.complete && img.naturalWidth) classifySingleImage(img);
-        else img.addEventListener("load", () => classifySingleImage(img), { once: true });
-      }
-    });
-    for (const img of document.querySelectorAll("img")) {
-      if (!img.complete) io.observe(img);
-    }
-  }
-}
-
-function classifySingleImage(img) {
-  if (img.dataset.dpibClassified) return;
-  img.dataset.dpibClassified = "1";
-  if (!img.complete || !img.naturalWidth) {
-    img.addEventListener("load", () => { img.dataset.dpibClassified = ""; classifySingleImage(img); }, { once: true });
-    return;
-  }
-  if (img.naturalWidth < 100 && img.naturalHeight < 100) return;
-  try {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-    ctx.drawImage(img, 0, 0);
-    const a = analyzeEdges(ctx, canvas.width, canvas.height);
-    if (a.avgLum < 0.2 && a.opaqueCount > 0) {
-      img.setAttribute("data-dpib-dark", "1");
-    }
-  } catch (e) { /* CORS */ }
 }
 
 // =============================================================================
@@ -552,12 +571,18 @@ function classifySingleImage(img) {
 
 // --- Remap functions ---
 
-function remapBackground(rgb) {
+function remapBackground(rgb, preferDark) {
+  const tint = preferDark ? TINT_DARK : TINT;
   // 有色相的底一律收成同色相的浅色块。不能按亮度放行——浅色不等于不刺眼，
   // 亮黄这种高饱和的照样很吵，放行等于留了个口子。
-  if (chromaOf(rgb) >= CHROMA_NEUTRAL) return tintStable(rgb, TINT.surface.L, TINT.surface.C);
-  // 中性底：按原来的暗度落到奶油梯级上
+  if (chromaOf(rgb) >= CHROMA_NEUTRAL) return tintStable(rgb, tint.surface.L, tint.surface.C);
   const lum = luminance(rgb);
+  // 中性底：按原来的明暗落到对应的梯级上。两条梯级的门槛方向相反——浅色那条是
+  // 「越暗的输入翻得越浅」，深色那条是「越亮的输入翻得越深」，超出门槛那端的原样不动。
+  if (preferDark) {
+    for (const [edge, L] of NEUTRAL_STEPS_DARK) if (lum >= edge) return settle(rgb, lchToCSS(L, BASE_CHROMA_DARK, BASE_HUE_DARK));
+    return null;
+  }
   for (const [edge, L] of NEUTRAL_STEPS) if (lum <= edge) return settle(rgb, lchToCSS(L, BASE_CHROMA, BASE_HUE));
   return null;
 }
@@ -565,27 +590,42 @@ function remapBackground(rgb) {
 // surfaceHue：本元素的底色被重映射成彩色块时，那块底的色相角；不是彩色块就传 null。
 // 压在彩色块上的**浅色中性字**要跟底色同色相，否则色相对冲——就是浅蓝底配深蓝字那种 chip 的做法。
 // （本身带色相的字不走这条，见下。）
-function remapText(rgb, surfaceHue) {
+function remapText(rgb, surfaceHue, preferDark) {
+  const tint = preferDark ? TINT_DARK : TINT;
   // 压在彩色块上的字，一律跟那块底同色相。这条必须排在最前：
   //   · 排在后面的话，输入可能先被别的分支认领，两次处理按不同色相走，颜色就会漂；
   //   · 彩色块里的字色常常是从祖先继承的，而祖先的字色早被本扩展压成墨色了，
   //     那时先判「够深了就别动」会把这类字永远留在墨色上，跟底色对不上。
-  if (surfaceHue !== null) return settle(rgb, lchToCSS(TINT.text.L, TINT.text.C, surfaceHue));
-  // 无彩底上：带色相的字重画成同色相的深色，不按亮度放行——相对亮度不是「够不够深」的可靠代理：
-  // #a855f7 / #3b82f6 / #ef4444 这些最常见的强调色亮度只有 0.21~0.24，看着像「已经够深」，
-  // 其实都在中调（L* 50 上下），压在奶油底上只有 2.5~3.7:1。按亮度放行等于把站点的品牌色留在浅底上读不清。
-  if (chromaOf(rgb) >= CHROMA_NEUTRAL) return tintStable(rgb, TINT.text.L, TINT.text.C);
-  // 已经是深灰的留着（浅色页面上本来就是合格的正文），浅的压成墨色
+  if (surfaceHue !== null) return settle(rgb, lchToCSS(tint.text.L, tint.text.C, surfaceHue));
+  // 无彩底上：带色相的字重画成同色相的目标色。放行看的是 **L\*** 而不是相对亮度——亮度不是
+  // 「够不够深」的可靠代理：#a855f7 / #3b82f6 / #ef4444 这些最常见的强调色亮度只有 0.21~0.24，
+  // 看着像「已经够深」，其实都在中调（L* 50 上下），压在奶油底上只有 2.5~3.7:1。
+  // 只在字落在**错误那一侧**时才拉：浅色方向上比目标更深、深色方向上比目标更浅的字，
+  // 本来就是合格正文，再往目标拉只会把它推向底色（实测：浅色页上 #94a3b8 那种中调面上的
+  // #172554 字、深色页上 #475569 那种暗块上的 #a7f3d0 字，都会被这一拉从 5:1 以上掉到 3:1 出头）。
+  if (chromaOf(rgb) >= CHROMA_NEUTRAL) {
+    const L = labOf(rgb)[0];
+    if (preferDark ? L >= tint.text.L : L <= tint.text.L) return null;
+    return tintStable(rgb, tint.text.L, tint.text.C);
+  }
+  // 中性字：浅色方向把「不够深」的压成墨色，深色方向把「不够浅」的提亮。
+  // 门槛也各按各的：浅色页的正文是深灰（lum < 0.25 算合格），深色页的正文是浅灰（lum >= 0.2 算合格）。
+  if (preferDark) return luminance(rgb) >= 0.2 ? null : INK_DARK;
   return luminance(rgb) < 0.25 ? null : INK;
 }
 
-function remapBorder(rgb) {
+function remapBorder(rgb, preferDark) {
   const lum = luminance(rgb);
-  // 已经是「中性 + 中调」的线，浅色页面上本来就合适，不动——本函数的输出正好落在这里，所以这也让它幂等
-  if (lum >= 0.3 && lum <= 0.7 && chromaOf(rgb) < CHROMA_NEUTRAL) return null;
+  const tint = preferDark ? TINT_DARK : TINT;
+  // 已经是「中性 + 中调」的线，在它要落到的那个页面上本来就合适，不动——本函数的输出正好落在这条带里，
+  // 所以这也让它幂等。深色页上的带比浅色页低一截，而且两头都要收：比 0.02 还暗的近黑线在深色页上
+  // 看不见，比 0.32 还亮的近白线在深色页上太扎眼，两端都得重画。
+  if (preferDark) {
+    if (lum > 0.02 && lum < 0.32 && chromaOf(rgb) < CHROMA_NEUTRAL) return null;
+  } else if (lum >= 0.3 && lum <= 0.7 && chromaOf(rgb) < CHROMA_NEUTRAL) return null;
   // 其余（太深、太亮、或带色相）都重画成同色相的一条线：深色主题的暗边框留成暗色会在浅底上看不见，
   // 而 #22c55e 那种中调高饱和的绿边框放行下来，在浅底上依然很吵
-  return tintStable(rgb, TINT.border.L, TINT.border.C);
+  return tintStable(rgb, tint.border.L, tint.border.C);
 }
 
 // 底色和文字常常不写在同一个元素上：`<div style="background:…"><span>文字</span></div>`、
@@ -616,14 +656,17 @@ function processElement(el) {
   if (PROCESSED.has(el)) return;
   PROCESSED.add(el);
   const style = getComputedStyle(el);
+  // 方向只在这里取一次，往下全部由这个局部量决定——Observer 那条路径没有 plan 可传。
+  const preferDark = state.preferDark;
+  const tint = preferDark ? TINT_DARK : TINT;
 
   // Gradient text
   const bgClip = style.webkitBackgroundClip || style.backgroundClip;
   const isGradientText = bgClip === "text" && style.backgroundImage.includes("gradient");
   if (isGradientText) {
     const colorMatches = style.backgroundImage.match(/rgba?\([^)]+\)/g);
-    let ink = INK;
-    if (colorMatches) { const fc = parseColor(colorMatches[0]); if (fc && chromaOf(fc) >= CHROMA_NEUTRAL) ink = tintTo(fc, TINT.text.L, TINT.text.C); }
+    let ink = preferDark ? INK_DARK : INK;
+    if (colorMatches) { const fc = parseColor(colorMatches[0]); if (fc && chromaOf(fc) >= CHROMA_NEUTRAL) ink = tintTo(fc, tint.text.L, tint.text.C); }
     el.style.setProperty("background-image", "none", "important");
     el.style.setProperty("-webkit-background-clip", "unset", "important");
     el.style.setProperty("background-clip", "unset", "important");
@@ -636,7 +679,7 @@ function processElement(el) {
   for (const prop of BG_PROPS) {
     const rgb = parseColor(style[prop]); if (!rgb) continue;
     ownBg = true;   // 自己有实底（哪怕是奶油色），就不该再继承祖先的底色色相
-    const mapped = remapBackground(rgb);
+    const mapped = remapBackground(rgb, preferDark);
     if (mapped) el.style.setProperty(cssProp(prop), toCSS(mapped), "important");
     // 注意用「生效色」判色相而不是用 mapped：mapped 为 null 表示「已经到位、不用改」，
     // 那时生效的是原值——第二遍处理时底色正是这种情况，用 mapped 会把色相丢掉。
@@ -651,7 +694,7 @@ function processElement(el) {
   if (!isGradientText) {
     for (const prop of TEXT_PROPS) {
       const rgb = parseColor(style[prop]); if (!rgb) continue;
-      const mapped = remapText(rgb, surfaceHue);
+      const mapped = remapText(rgb, surfaceHue, preferDark);
       if (mapped) el.style.setProperty(cssProp(prop), toCSS(mapped), "important");
     }
   }
@@ -659,15 +702,16 @@ function processElement(el) {
   // Borders
   for (const prop of BORDER_PROPS) {
     const rgb = parseColor(style[prop]); if (!rgb) continue;
-    const mapped = remapBorder(rgb);
+    const mapped = remapBorder(rgb, preferDark);
     if (mapped) el.style.setProperty(cssProp(prop), toCSS(mapped), "important");
   }
 
-  // SVG fill/stroke
+  // SVG fill/stroke。这一支不分方向：判据是「fill 本身是暗的」（暗图标在哪个方向的页面上都容易糊），
+  // 落点取 SOL 的中性灰——那几个灰在两个方向上都看得见，所以换方向不用换值。
   if (el instanceof SVGElement) {
     const fill = parseColor(style.fill);
     if (fill && isDark(fill)) {
-      const mapped = chromaOf(fill) >= CHROMA_NEUTRAL ? tintStable(fill, TINT.text.L, TINT.text.C) : SOL.base00;
+      const mapped = chromaOf(fill) >= CHROMA_NEUTRAL ? tintStable(fill, tint.text.L, tint.text.C) : SOL.base00;
       if (mapped) el.style.setProperty("fill", toCSS(mapped), "important");
     }
     const stroke = parseColor(style.stroke);
@@ -681,24 +725,28 @@ function processElement(el) {
       if (bgImage.includes("gradient")) {
         el.style.setProperty("background-image", "none", "important");
         const bg = parseColor(style.backgroundColor);
-        if (!bg || luminance(bg) < 0.2) {
-          // 渐变被抹平后拿第一个色停当代表：带色相就留色相，否则退回奶油底
+        // 只在「自己没画底，或者画的那个底跟要翻到的方向是反的」时才补一个底色
+        if (!bg || (preferDark ? luminance(bg) >= 0.2 : luminance(bg) < 0.2)) {
+          // 渐变被抹平后拿第一个色停当代表：带色相就留色相，否则退回锚点底
           const first = bgImage.match(/rgba?\([^)]+\)/);
           const fc = first && parseColor(first[0]);
-          el.style.setProperty("background-color", toCSS(fc && chromaOf(fc) >= CHROMA_NEUTRAL ? tintTo(fc, TINT.surface.L, TINT.surface.C) : SOL.base3), "important");
+          el.style.setProperty("background-color", toCSS(fc && chromaOf(fc) >= CHROMA_NEUTRAL ? tintTo(fc, tint.surface.L, tint.surface.C) : (preferDark ? SOL.base03 : SOL.base3)), "important");
         }
-      } else if (bgImage.includes("url(")) {
-        // Background image URL — analyze and solarize if dark
-        solarizeBackgroundImage(el, bgImage);
       }
+      // 背景图（url(...)）不处理：媒体一律保持原样。滤镜模式下它避免不了跟着整页翻
+      // （反向滤镜加不到单张背景图上），这是整页滤镜这条路线本身的代价，不是这里漏了。
     }
   }
 
-  // Box shadows
+  // Box shadows：把「跟目标页面对不上」的阴影色换掉。浅色页上换掉暗阴影（深色页上的暗阴影本来就不显形），
+  // 深色页上换掉亮阴影——亮阴影压上去是刺眼的。
   const shadow = style.boxShadow;
   if (shadow && shadow !== "none") {
+    const replacement = preferDark ? "rgba(0, 0, 0, 0.4)" : "rgba(101, 123, 131, 0.15)";
     el.style.setProperty("box-shadow", shadow.replace(/rgba?\([^)]+\)/g, (match) => {
-      const rgb = parseColor(match); if (rgb && isDark(rgb)) return "rgba(101, 123, 131, 0.15)"; return match;
+      const rgb = parseColor(match);
+      if (rgb && (preferDark ? !isDark(rgb) : isDark(rgb))) return replacement;
+      return match;
     }), "important");
   }
 }
@@ -710,44 +758,14 @@ function processTree(root) {
   while (walker.nextNode()) processElement(walker.currentNode);
 }
 
-// --- Background image solarization ---
-
-function solarizeBackgroundImage(el, bgImage) {
-  const urlMatch = bgImage.match(/url\(["']?([^"')]+)["']?\)/);
-  if (!urlMatch) return;
-  const url = urlMatch[1];
-  // Skip data URIs that are tiny (likely 1px spacers)
-  if (url.startsWith("data:") && url.length < 200) return;
-
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.onload = () => {
-    if (img.naturalWidth < 100 && img.naturalHeight < 100) return;
-    try {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-      ctx.drawImage(img, 0, 0);
-      const a = analyzeEdges(ctx, canvas.width, canvas.height);
-      if (a.avgLum < 0.2 && a.opaqueCount > 0) {
-        el.style.setProperty("filter", SOLARIZE_FILTER, "important");
-      }
-    } catch (e) { /* CORS / tainted */ }
-  };
-  img.onerror = () => {}; // silent fail
-  img.src = url;
-}
-
 // --- Remap mode global CSS ---
 
 // 这里只放逐元素重映射够不着的东西——伪元素（滚动条、选区、placeholder）。
 // 输入框、链接、代码块一律交给 processElement：那些元素有真实样式，硬编码颜色只会跟站点品牌色打架，
 // 而且逐元素那套能把站点的色相留住。
-function injectRemapStyles() {
-  if (document.getElementById("dpib-remap-global")) return;
-  const style = document.createElement("style");
-  style.id = "dpib-remap-global";
-  style.textContent = `
+// 深色那一套取的是中性梯级的落点：轨道用页面那档（L*16）、滑块和 placeholder 用中间那档（L*28）、
+// 选区底用一档更亮的面（L*25）、选区文字用深色方向的正文色。
+const REMAP_CHROME_LIGHT = `
     ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-track { background: #eee8d5 !important; }
     ::-webkit-scrollbar-thumb { background: #93a1a1 !important; border-radius: 5px; }
@@ -755,77 +773,21 @@ function injectRemapStyles() {
     ::selection { background: #eee8d5 !important; color: #586e75 !important; }
     input::placeholder, textarea::placeholder { color: #93a1a1 !important; }
   `;
+const REMAP_CHROME_DARK = `
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: #012c37 !important; }
+    ::-webkit-scrollbar-thumb { background: #224753 !important; border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: #354247 !important; }
+    ::selection { background: #1a404c !important; color: #a3bac2 !important; }
+    input::placeholder, textarea::placeholder { color: #224753 !important; }
+  `;
+
+function injectRemapStyles(preferDark) {
+  if (document.getElementById("dpib-remap-global")) return;
+  const style = document.createElement("style");
+  style.id = "dpib-remap-global";
+  style.textContent = preferDark ? REMAP_CHROME_DARK : REMAP_CHROME_LIGHT;
   document.head.appendChild(style);
-}
-
-// =============================================================================
-// IMAGE ANALYSIS (shared by filter + remap modes)
-// =============================================================================
-
-function analyzeEdges(ctx, w, h) {
-  const edge = Math.max(1, Math.round(Math.min(w, h) * 0.1));
-  const regions = [
-    ctx.getImageData(0, 0, w, edge),
-    ctx.getImageData(0, h - edge, w, edge),
-    ctx.getImageData(0, edge, edge, h - 2 * edge),
-    ctx.getImageData(w - edge, edge, edge, h - 2 * edge),
-  ];
-  let totalLum = 0, opaqueCount = 0, transparentCount = 0;
-  for (const region of regions) {
-    const d = region.data;
-    for (let i = 0; i < d.length; i += 16) {
-      if (d[i + 3] < 128) { transparentCount++; continue; }
-      totalLum += luminanceQuick(d[i], d[i + 1], d[i + 2]);
-      opaqueCount++;
-    }
-  }
-  const total = opaqueCount + transparentCount;
-  return {
-    avgLum: opaqueCount > 0 ? totalLum / opaqueCount : 1,
-    transparentRatio: total > 0 ? transparentCount / total : 0,
-    opaqueCount,
-  };
-}
-
-function shouldSolarizeImage(a) {
-  if (a.avgLum < 0.2 && a.opaqueCount > 0) return true;
-  if (a.transparentRatio > 0.5 && a.avgLum > 0.7 && a.opaqueCount > 10) return true;
-  return false;
-}
-
-function solarizeImage(img) {
-  if (img.dataset.solarizeChecked) return;
-  img.dataset.solarizeChecked = "1";
-  if (!img.complete || !img.naturalWidth) {
-    img.addEventListener("load", () => { img.dataset.solarizeChecked = ""; solarizeImage(img); }, { once: true });
-    return;
-  }
-  if (img.naturalWidth < 100 && img.naturalHeight < 100) return;
-  try {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-    ctx.drawImage(img, 0, 0);
-    if (shouldSolarizeImage(analyzeEdges(ctx, canvas.width, canvas.height))) {
-      img.style.setProperty("filter", SOLARIZE_FILTER, "important");
-    }
-  } catch (e) { /* CORS */ }
-}
-
-function processImages() {
-  for (const img of document.querySelectorAll("img")) solarizeImage(img);
-  if ("IntersectionObserver" in window) {
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        if (!e.isIntersecting) continue;
-        io.unobserve(e.target);
-        e.target.dataset.solarizeChecked = "";
-        if (e.target.complete && e.target.naturalWidth) solarizeImage(e.target);
-        else e.target.addEventListener("load", () => { e.target.dataset.solarizeChecked = ""; solarizeImage(e.target); }, { once: true });
-      }
-    });
-    for (const img of document.querySelectorAll("img")) { if (!img.complete) io.observe(img); }
-  }
 }
 
 // =============================================================================
@@ -839,21 +801,9 @@ function createObserver() {
       for (const node of m.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
         if (state.activeMode === "remap") processTree(node);
-        // Images for both remap and filter modes
-        if (state.activeMode === "remap") {
-          if (node.tagName === "IMG") solarizeImage(node);
-          for (const img of node.querySelectorAll("img")) solarizeImage(img);
-        } else if (state.activeMode === "filter") {
-          if (node.tagName === "IMG") classifySingleImage(node);
-          for (const img of node.querySelectorAll("img")) classifySingleImage(img);
-        }
       }
       if (m.type === "attributes" && m.target.nodeType === Node.ELEMENT_NODE) {
         if (state.activeMode === "remap") { PROCESSED.delete(m.target); processElement(m.target); }
-        if (m.target.tagName === "IMG" && (m.attributeName === "src" || m.attributeName === "srcset")) {
-          if (state.activeMode === "remap") { m.target.dataset.solarizeChecked = ""; solarizeImage(m.target); }
-          if (state.activeMode === "filter") { m.target.dataset.dpibClassified = ""; classifySingleImage(m.target); }
-        }
       }
     }
     observer.observe(document.body, OBSERVER_CONFIG);
@@ -908,12 +858,12 @@ function validateContrast() {
 // COLOR SCHEME
 // =============================================================================
 
-// 站点声明了 color-scheme: dark 时，即使页面被翻浅，滚动条和表单控件仍按深色渲染。
+// 站点声明了 color-scheme: dark 时，即使页面被翻浅，滚动条和表单控件仍按深色渲染（翻深时反过来）。
 // 用 inline + important 压过站点样式表；只负责设置，不做移除或回退。
 
-function applyLightColorScheme() {
+function applyColorScheme(preferDark) {
   const style = document.documentElement.style;
-  style.setProperty("color-scheme", "light", "important");
+  style.setProperty("color-scheme", preferDark ? "dark" : "light", "important");
 }
 
 // =============================================================================
@@ -926,16 +876,15 @@ function startFilterMode() {
 }
 
 function startRemapMode() {
-  injectRemapStyles();
+  injectRemapStyles(state.preferDark);
   stopObserving();
   processTree(document.documentElement);
-  processImages();
   startObserving();
 }
 
-// 「优先原生」能不能试，由检测决定 —— 站点那个开关是用来把深色切成浅色的，
-// 页面已经是浅色时它无事可做；而且复测函数在本来就是浅色的页上会假成功、把整条链提前结束。
-// 所以候选（state.nativeSignals）在 detect() 里就按 state.isDark 门控好了，这里只读不算。
+// 「优先原生」能不能试，由检测决定 —— 站点那个开关是用来把页面切到另一端的，
+// 页面已经是偏好色时它无事可做；而且复测函数在本来就是偏好色的页上会假成功、把整条链提前结束。
+// 所以候选（state.nativeSignals）在 detect() 里就按「这一页要不要翻」门控好了，这里只读不算。
 // 返回**实际生效的方法**："native" | "filter" | "remap"。
 function runMethod({ preferNative, method }, isAuto) {
   if (!preferNative || !state.nativeSignals.length) return Promise.resolve(method);
@@ -946,6 +895,9 @@ async function apply(plan, isAuto) {
   if (state.isApplied || state.applying) return;
   state.applying = true;
   try {
+    // 这一次处置的方向以 plan 为准落进 state：Observer 那条路径（processElement）
+    // 没有 plan 可传，只能读 state。
+    state.preferDark = plan.preferDark;
     const method = await runMethod(plan, isAuto);
     if (!method) return;                       // 切不动 → 就当没切过，不谎报成功
     // runMethod 只**返回**方法名，而且 native 那条它已经在内部跑完了；
@@ -961,7 +913,7 @@ async function apply(plan, isAuto) {
         console.log(`  ${it.level === "critical" ? "严重" : "警告"} ${it.ratio}:1 — <${it.tag}> "${it.text}"  文字 ${it.textColor} / 底色 ${it.bgColor}`);
       }
     }
-    applyLightColorScheme();
+    applyColorScheme(plan.preferDark);
     state.activeMode = method;
     state.appliedMode = planKey(plan);         // 记住用的是哪次处置，设置一变好判断要不要重来
     state.isApplied = true;
@@ -1030,51 +982,71 @@ async function readSettings() {
       const s = MODEL.normalizeSetting(raw.sites[host]);   // 坏值当没设过
       if (s) sites[host] = s;
     }
-    return { global: MODEL.normalizeSetting(raw.global) || MODEL.DEFAULT_GLOBAL, sites };
+    return { global: MODEL.normalizeGlobal(raw.global) || MODEL.DEFAULT_GLOBAL, sites };
   } catch (e) {
     // 读不到设置时保守：不动页面
-    return { global: { enabled: false, preferNative: true, method: "filter" }, sites: {} };
+    return { global: { ...MODEL.DEFAULT_GLOBAL, enabled: false }, sites: {} };
   }
 }
 
-// 一次处置的可比较标识：设置变了要靠它判断这一页要不要整页重来
-function planKey(plan) {
-  return plan.action + "|" + !!plan.preferNative + "|" + plan.method;
+// 系统/浏览器当前的深浅偏好。问不到时按浅色算——没有依据时猜错的方向是把页面翻黑。
+function systemPrefersDark() {
+  try { return window.matchMedia("(prefers-color-scheme: dark)").matches; } catch (e) { return false; }
 }
 
-function detect() {
-  state.isDark = detectDarkPage();
-  state.nativeSignals = state.isDark ? detectNativeThemeSupport() : [];
-  state.lsSwitch = state.isDark ? discoverLocalStorageSwitch() : null;
+// 这一页该怎么办（含方向）。读一次设置的唯一入口，自动路径与消息路径都走它。
+async function currentPlan() {
+  const settings = await readSettings();
+  return MODEL.resolveSetting(settings.global, settings.sites[hostKey()], systemPrefersDark());
+}
+
+// 一次处置的可比较标识：设置变了要靠它判断这一页要不要整页重来。
+// 方向必须算进去——只改了偏好（浅↔深）时 action/preferNative/method 都不变，少这一项就不会重来。
+function planKey(plan) {
+  return plan.action + "|" + !!plan.preferNative + "|" + plan.method + "|" + (plan.preferDark ? "dark" : "light");
+}
+
+// 检测这一页 + 定方向。要读设置是因为「要不要翻」得先知道偏好是什么。
+async function detect() {
+  const plan = await currentPlan();
+  state.preferDark = plan.preferDark;
+  state.pageTone = detectPageTone();
+  // 只有「这一页明确和偏好相反」时才去找原生开关：站点那个开关是用来把页面切到另一端的，
+  // 页面本来就是偏好色时它无事可做，而复测函数在那种页面上会假成功、把整条处理链提前结束。
+  // 判不出时也不找——没有依据就别猜，猜错任一方向都是把页面弄得更糟。
+  const needsFlip = state.pageTone !== TONE_UNKNOWN && state.pageTone !== toneFor(plan.preferDark);
+  state.nativeSignals = needsFlip ? detectNativeThemeSupport(plan.preferDark) : [];
+  state.lsSwitch = needsFlip ? discoverLocalStorageSwitch(plan.preferDark) : null;
 }
 
 async function getStatus() {
   const settings = await readSettings();
   const host = hostKey();
   // localStorage 那一档切成功后会 reload，本次加载里没有任何 DOM 改动，
-  // 但页面确实是扩展翻浅的，用户也能用「关闭本站」还原，所以照「已应用」报给 popup——
+  // 但页面确实是扩展翻过来的，用户也能用「关闭本站」还原，所以照「已应用」报给 popup——
   // 这样 popup 会显示本站已生效，并给出「关闭本站」这个还原入口。
+  const plan = MODEL.resolveSetting(settings.global, settings.sites[host], systemPrefersDark());
   const undo = (await readUndoMap())[host];
-  const undoActive = !!undo && !state.isDark;
+  const undoActive = !!undo && state.pageTone === toneFor(plan.preferDark);
   return {
-    isDark: state.isDark,
+    pageTone: state.pageTone,
     isApplied: state.isApplied || undoActive,
     activeMode: state.isApplied ? state.activeMode : (undoActive ? "native" : null),
     host,
     global: settings.global,
     site: settings.sites[host] || null,        // null = 跟随全局
-    plan: MODEL.resolveSetting(settings.global, settings.sites[host]),   // 这一页该怎么办
+    plan,                                      // 这一页该怎么办
     hasNative: state.nativeSignals.length > 0 || !!state.lsSwitch,
     autoApplied: state.isApplied ? state.autoApplied : !!(undo && undo.auto),
   };
 }
 
 async function applyResolved(isAuto) {
-  const settings = await readSettings();
-  const plan = MODEL.resolveSetting(settings.global, settings.sites[hostKey()]);
+  const plan = await currentPlan();
   if (plan.action === "none") return;
-  // action === "force" 时不看检测结果：站点级是「断言」，你说了算
-  if (plan.action === "auto" && !state.isDark) return;
+  // 自动路径下，这一页已经是偏好色、或者根本判不出深浅，都不动它。
+  // action === "force" 时不看检测结果：站点级是「断言」，你说了算。
+  if (plan.action === "auto" && (state.pageTone === TONE_UNKNOWN || state.pageTone === toneFor(plan.preferDark))) return;
   await apply(plan, isAuto);
 }
 
@@ -1085,8 +1057,7 @@ async function autoApply() {
 }
 
 async function onSettingsChanged() {
-  const settings = await readSettings();
-  const plan = MODEL.resolveSetting(settings.global, settings.sites[hostKey()]);
+  const plan = await currentPlan();
 
   if (state.isApplied) {
     // 已翻转的页面：这一页的处置变了自己换不回来，整页重来；没变就保持现状
@@ -1094,8 +1065,17 @@ async function onSettingsChanged() {
     return;
   }
   if (plan.action === "none") return;
-  detect();
+  await detect();
   await applyResolved(true);
+}
+
+// 系统偏好变了 = 一次设置变更：已翻转的页面整页重来，没翻的重新判定。
+// 偏好不是「跟随系统」时这条通知无事可做（planKey 不会变，onSettingsChanged 自己会早退）。
+async function onSystemPreferenceChanged() {
+  if (window !== window.top) return;      // 只有顶层维护 state，iframe 不掺和
+  const settings = await readSettings();
+  if (settings.global.preference !== "system") return;
+  await onSettingsChanged();
 }
 
 // =============================================================================
@@ -1110,7 +1090,12 @@ const ready = (async () => {
   // 甚至自己 reload。
   if (window !== window.top) return;
   await settleLocalStorageTrial();
-  detect();
+  await detect();
 })();
 
 ready.then(() => autoApply());
+
+// 挂系统偏好的监听：默认就是「跟随系统」，所以这条在大多数安装上是常开的。
+try {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { ready.then(onSystemPreferenceChanged); });
+} catch (e) { /* 老浏览器没有 addEventListener 形式，静态的偏好值照样能用 */ }

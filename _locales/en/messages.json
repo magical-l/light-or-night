@@ -1,11 +1,12 @@
 {
-  "extDesc": { "message": "Automatically turns dark pages light — the site's own theme when it has one, else a color remap or filter. Per-site settings." },
+  "extDesc": { "message": "Automatically turns pages to your preferred light or dark — the site's own theme when it has one, else a color remap or filter. Per-site settings." },
   "extName": { "message": "Light or Night" },
   "checking": { "message": "Checking..." },
   "cannotAccessPage": { "message": "Cannot access page" },
   "cannotRunHere": { "message": "Can't run on this page (chrome://, extensions, etc.)" },
-  "darkPageDetected": { "message": "Dark page detected" },
-  "lightPage": { "message": "Light page" },
+  "darkPage": { "message": "This page is dark" },
+  "lightPage": { "message": "This page is light" },
+  "pageToneUnknown": { "message": "Can't tell light or dark" },
   "appliedMethod": {
     "message": "Applied: $method$",
     "placeholders": { "method": { "content": "$1" } }
@@ -14,9 +15,18 @@
   "levelSite": { "message": "This site" },
   "switchOn": { "message": "On" },
   "switchOff": { "message": "Off" },
+  "preference": { "message": "Preference" },
+  "preferSystemNow": {
+    "message": "System ($dir$)",
+    "placeholders": { "dir": { "content": "$1" } }
+  },
+  "dirLight": { "message": "light" },
+  "dirDark": { "message": "dark" },
+  "preferLight": { "message": "Light" },
+  "preferDark": { "message": "Dark" },
   "methodFilter": { "message": "Quick filter" },
   "methodRemap": { "message": "Color remap" },
-  "methodNative": { "message": "Site's own light mode" },
-  "preferNative": { "message": "Try the site's own light mode first" },
+  "methodNative": { "message": "Site's own theme" },
+  "preferNative": { "message": "Try the site's own theme switch first" },
   "followGlobal": { "message": "Follow global" }
 }
