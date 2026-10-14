@@ -89,6 +89,8 @@
 
 **这套函数必须幂等。** 这是个容易踩的硬约束：`MutationObserver` 把 `style` 也当触发条件，扩展自己写进去的 inline style 会让元素被再处理一遍（截图、滚动都能触发）。所以输出值再喂回这套函数必须「保持原样或得到同一个值」，否则颜色会被二次映射、来回漂。为此有 `settle()`（离目标 ±2 色阶内就不再写）。踩过三次：`base2` 边框被二次映射成 `base1`；色块彩度放到 25 后底色自己开始漂；`remapText` 的分支顺序让两次处理按不同色相走。
 
+**颜色解析要认现代色彩语法。** `parseColor()` 是判定 / 颜色映射 / 切换复测共用的入口。Chrome 对**色域外**的计算色会保留原色彩空间，Tailwind v4 那类站的底色就是 `lab(...)` —— 只认 `rgb()` / `hsl()` / `#hex` 会整片返回 `null`（判定恒 `unknown`、映射逐属性静默跳过）。转换交给浏览器做：白名单 + `CSS.supports` 两道闸之后，填一个 1×1 `canvas` 像素再 `getImageData` 读回来，**不自己写色彩数学**。那块 canvas 是复用的，**每次必须先 `clearRect`**（`fillRect` 是 source-over 合成，填 `alpha = 0` 的颜色时旧像素会透出来）。结果按字符串缓存，上限 2000 行。
+
 ## 已知边界（未做）
 
 | 项 | 说明 |
@@ -97,7 +99,9 @@
 | **SPA 的 `#` 变化与 `history.pushState`** | 不重新判定——只在 `document_idle` 判一次。所有 SPA 都受影响，与模型无关 |
 | **旧存储键不会被清** | 早期的 `globalMode`、以及 `sites[host]` 里旧的字符串值，读到时会当"没设过"忽略，但**不会从 `storage.sync` 里删掉**——storage 检查器里会一直看到它们。真实用户≈0，没做清理 |
 | **`tools/probe-detection.cjs` 的切片** | 它靠"从 `function parseColor(` 切到 `detectPageTone` 后第一个顶格 `}`"抽检测段——那两个锚点处的函数名或格式一改它就失效。只在手工验证时用，不进交付包 |
-| **半透明色丢 alpha** | `parseColor` 只取 rgb、不看 alpha，所以 `rgba(0,0,0,.5)` 这种遮罩会被换成**不透明**的奶油，靠半透明做的叠加层次就没了。旧版同样如此，不是这次引入的 |
+| **半透明色丢 alpha** | `parseColor` 只取 rgb、不看 alpha，所以 `rgba(0,0,0,.5)` 这种遮罩会被换成**不透明**的奶油，靠半透明做的叠加层次就没了。旧版同样如此，不是这次引入的。现代色彩语法那条路上额外有一层：`alpha` 小于约 0.002 的值会被 8-bit 舍入成 0，**当透明整个丢掉**（`alpha` 恰好为 0 的现代色返回 `null` 是有意的——那等同于没画底） |
+| **remap 会顶掉颜色动画** | 站点元素跑着 `@keyframes` 的颜色动画时，`getComputedStyle` 返回动画当前帧；remap 写内联 `!important` 之后动画不再生效。这是层叠规定的：**important author 高于 animation**，而 remap 必须用 `!important` 才能盖过站点自己的样式表——能盖住站点的，就一定能盖住动画。要保留动画只能对这类元素去掉 `!important`，代价是那个属性在动画期间完全不受扩展管（显示站点原色）。未做 |
+| **现代色彩函数的白名单是写死的** | `parseColor` 只放行 `lab` / `lch` / `oklab` / `oklch` / `color` 五个函数名。以后出现新的色彩函数（或浏览器改了序列化方式），要手动加；不加的后果是**退回 `null`**，也就是回到加这个能力之前的样子，不会更糟 |
 | **中性底色之间是硬台阶** | 中性深底按亮度分档落奶油梯级（`NEUTRAL_STEPS`）。档与档之间没有过渡：亮度 0.19 的中性面落到 L\*83，0.21 的原样不动——两者在浅色页上的明暗关系会反过来。深色主题很少在这个区间放背景，暂不处理 |
 | **中性灰文字卡在 AA 线上** | 浅色方向中性字亮度 < 0.25 就原样保留，个别中灰（如 `#6b7280`，亮度 0.167）压在奶油底上只有 4.48:1，差 0.02 到 AA。要收严就把这个门槛往下挪一点 |
 | **滤镜的 GPU 开销** | 整页 `filter` 会让浏览器走「先渲染到离屏再过滤」的通道，**页面里任何动画/过渡都会触发整页重新过滤**。实测 `build.nvidia.com`：关扩展约 45%、开滤镜约 70%（该页自身有 3 个 canvas、51 条 `animation` 规则、114 条 `transition` 规则） |
@@ -122,6 +126,8 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 
 配色这类改动的**数值验证**可以脱离浏览器做：把 `content.js` 里 `const SOL = {` 到 `function cssProp(` 之间的纯函数段切出来，在 Node 里直接跑，查四件事——幂等、WCAG AA、耐受规则、字与底的 ΔH\*ab。比截图快也准。
 
+**但 `parseColor` 的 canvas 那条分支在 Node 里验不了**——它要 `document.createElement("canvas")`，Node 没有 `document`，一跑就报错。那条分支（以及"现代色到底转成了什么"）只能在浏览器里验：用 Playwright 驱动一个页面，把落盘的 `parseColor` 段注入进去喂真实字符串（`lab()` / `oklab()` / `oklch()` / `color()`，加上 `lab(1 2)`、`var(--x)`、`currentColor`、`alpha` 为 0 这些边界），拿 canvas 直读当对照。**喂进去的必须是落盘的源码，不要手抄一份副本。**
+
 **检测段的验证用 `tools/probe-detection.cjs`。** 它把 `content.js` 里已落盘的检测段（`function parseColor(` 一路到 `function detectPageTone(` 的收尾）原样抽出来，拼成一个 Kimi WebBridge 的 `evaluate` 请求体——在真实页面上跑的是**交付的代码本体**，不是另写一份副本。用法：`node tools/probe-detection.cjs '<尾部JS表达式>' > req.json`，尾部可用的东西有 `detectPageTone()` / `firstPaintedBackground(el)` / `getComputedStyle` 等。
 
 **验证手段的两个坑：**
@@ -141,6 +147,22 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 - `chat.deepseek.com`、`e2b.dev`、`program.pinokio.computer`、`serper.dev`、`xiutaku.com`
 
 ## 决策日志
+
+### 2026-10（2.5.0）
+
+**`parseColor` 认现代色彩语法。** Chrome 对**色域外**的计算色会保留原色彩空间——Tailwind v4 那类站的 `<html>` 底色就是 `lab(1.90334 0.278696 -5.48866)`。老代码只认 `rgb()` / `hsl()` / `#hex`、返回 `null`，连锁三处失效：判定恒 `unknown`（自动路径整站不动）、原生切换的复测恒判失败（永远回滚）、颜色映射逐属性静默跳过。实测 tailwind 官网**深色状态下** 50% 的元素（498/996）踩这条。
+
+**为什么是"两道闸 + 交给浏览器"**：白名单（`lab|lch|oklab|oklch|color`）管"是不是我们支持的那类函数名"，`CSS.supports("color", …)` 管"这串字本身完不完整"（`lab(1 2)` 名字对、参数残，靠后者挡）。不自己实现色彩数学——`lab`/`lch`/`oklab`/`oklch`/`color()` 各要一套矩阵与色域处理，而 canvas 用的是浏览器自己的实现，以后新增色彩空间自动跟上。
+
+**不能用 `ctx.fillStyle` 的读值归一。** 实测它把 `lab(...)` / `oklch()` / `color()` **原样吐回来**，只把 `rgb()` / `hsl()` 归成 hex。必须填一格再 `getImageData` 读像素。
+
+**那块 canvas 是复用的，每次必须先 `clearRect`。** `fillRect` 默认走 source-over 合成，填 `alpha = 0` 的颜色时像素原封不动，上一次转过的颜色会透出来——一个本该透明的底色会被画上错的实色。这是静态审查抓出来的缺陷，不在最初的设计里。
+
+**结果表要有上限。** 颜色映射下 `parseColor` 一页被调用约 4000 次（每元素 7 个属性：1 背景 + 1 文字 + 5 边框/轮廓），但**不同**的现代色字符串很少（tailwind 一页只有 22 个），所以缓存一次、之后查表：不缓存要 2.8 秒，缓存后 16ms。表只进不出，超过 2000 行整张清空。
+
+**验证时注意**：tailwind 上这条只在**深色状态**下看得出效果——浅色状态下 `<html>` / `<body>` 都是 `rgba(0, 0, 0, 0)`（本来就没画底），判定仍是 `unknown`，那是「判不出就报判不出」那条既有的独立边界。要看效果先把站点切到深色再刷新。
+
+**「优化1」——点击页面自带的浅色/深色按钮——调研后否掉。** 点击机制本身可行（CDP 真鼠标事件驱得动站点 JS），严格匹配（不收 `<a>`、标签本身是控件、名字整个等于主题词）误报 0/9，**但覆盖薄**：9 个站只命中 2 个，真开关大多在菜单里（bing 齿轮→外观、youtube 设置→外观、github 头像菜单），而菜单内容是**懒渲染**的（关着的时候 DOM 里没有节点）、够到它就得可见地展开菜单。顺带否掉的还有两条：**读跨域 CSS**（实测收益 0/12——有主题钩子的 8 个站 CSS 全可读，CSS 读不到的 4 个站一个钩子都没有；且 MV3 内容脚本的跨域 fetch 受 CORS 限制、`host_permissions` 也解不开，要绕得新增 background service worker）、**改站点的 CSS 变量 token**（拿不到 token 清单、token 不带角色——同一个 `#0c0c0c` 当底/当字/当线要落三个不同的档，而角色只能从元素的计算样式读出来）。**全账见 `docs/investigate-flip-coverage.md`。**
 
 ### 2026-10（2.4.0）
 

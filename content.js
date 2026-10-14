@@ -114,6 +114,33 @@ const SOLARIZE_FILTER = "invert(100%) hue-rotate(180deg)";
 // COLOR UTILITIES
 // =============================================================================
 
+// 计算色不一定归成 rgb()：Chrome 对色域外的值会保留原色彩空间，Tailwind v4 那类站的
+// backgroundColor 就是 lab(...) / oklab(...)——只认 rgb() / hsl() / #hex 会整片解析失败
+// （实测 tailwind 官网一半元素的颜色属性落在这条路上：页面判定恒 unknown、颜色映射被静默跳过）。
+// 转换交给浏览器自己做：填一个 1×1 像素再读回来。
+// 不能用 ctx.fillStyle 的读值归一——它把 lab(...) / oklch() / color() 原样吐回来，只归 rgb() / hsl()。
+const MODERN_COLOR_RE = /^(lab|lch|oklab|oklch|color)\(/i;
+const COLOR_CACHE_MAX = 2000;
+const colorCache = new Map();
+let colorCtx = null;
+
+function modernColorToRgb(str) {
+  if (!colorCtx) {
+    const cv = document.createElement("canvas");
+    cv.width = 1; cv.height = 1;
+    colorCtx = cv.getContext("2d", { willReadFrequently: true });
+  }
+  // 每次先擦成「全透明黑」再填。fillRect 默认是 source-over 合成：填一个带透明度的颜色时
+  // 底下的旧像素会透出来，不擦的话 alpha 为 0 的输入会读回上一次的颜色。
+  // 擦干净之后，「alpha 为 0」和「fillStyle 没接受这个值」两种情况读到的都是 a === 0，一律返回 null。
+  colorCtx.clearRect(0, 0, 1, 1);
+  colorCtx.fillStyle = str;
+  colorCtx.fillRect(0, 0, 1, 1);
+  const d = colorCtx.getImageData(0, 0, 1, 1).data;
+  // alpha 为 0 视为没画底（与 isTransparentColor 同语义）：返回 null
+  return d[3] === 0 ? null : [d[0], d[1], d[2]];
+}
+
 function parseColor(str) {
   if (!str || str === "transparent" || str === "rgba(0, 0, 0, 0)") return null;
   let m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
@@ -126,7 +153,19 @@ function parseColor(str) {
     if (h.length === 3) return [parseInt(h[0]+h[0],16), parseInt(h[1]+h[1],16), parseInt(h[2]+h[2],16)];
     if (h.length >= 6) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
   }
-  return null;
+  // 现代色彩语法。两道闸各挡一类，缺一不可：
+  //   白名单挡「canvas 会解错的值」——currentColor 会被它解成 #000000（静默给一个假的黑），
+  //     var() / inherit / AccentColor 它直接忽略；
+  //   CSS.supports 挡「名字对、参数残」的写法（lab(1 2)）。
+  // 两道都不挡的话，函数会读成「全透明」返回 null——语义退化成"这个属性没有颜色"，
+  // 不致命，但会静默漏掉一个本该处理的颜色。
+  if (colorCache.has(str)) return colorCache.get(str);
+  if (!MODERN_COLOR_RE.test(str) || !CSS.supports("color", str)) return null;
+  const modern = modernColorToRgb(str);
+  // 结果表只进不出，给个上限：真实增长只来自「无限滚动 / 持续生成新颜色」的页面
+  if (colorCache.size >= COLOR_CACHE_MAX) colorCache.clear();
+  colorCache.set(str, modern);
+  return modern;
 }
 
 function hslToRgb(h, s, l) {
