@@ -6,7 +6,7 @@
   "cannotRunHere": { "message": "无法在此页面运行（chrome://、扩展等）" },
   "darkPage": { "message": "本页为深色" },
   "lightPage": { "message": "本页为浅色" },
-  "pageToneUnknown": { "message": "无法判断本页明暗" },
+  "pageToneUnknown": { "message": "未能识别本页深浅" },
   "appliedMethod": {
     "message": "已用：$method$",
     "placeholders": { "method": { "content": "$1" } }
