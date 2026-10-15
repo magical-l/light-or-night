@@ -209,16 +209,21 @@ async function handleGlobalPreference(e) {
   await writeGlobalSetting({ ...currentGlobal, preference: value });
 }
 
-// 本站开关：关掉 = 断言「本站别动」，写 enabled:false；手段与原生以本站已存值
-// 为准（没设过本站才拿全局兜底），再通知内容脚本还原本站 localStorage 并重载。
-// 从关闭再打开 = 沿用本站已存的手段与原生偏好。
+// 本站开关：关掉 = 断言「本站别动」，写 enabled:false，同时把「关之前选的是哪一档」记进
+// method（null = 跟随全局）；再打开时照这一档恢复。关掉时也通知内容脚本还原本站 localStorage 并重载。
 async function handleSiteSwitch() {
   const following = currentSite === null;
   const siteOn = following ? true : currentSite.enabled;
   if (siteOn) {
-    const base = currentSite || { preferNative: currentGlobal.preferNative, method: currentGlobal.method };
+    // 跟随全局时本站什么取值都没有，只写 enabled:false：键在 = 这一站别动，没有 method = 没有自己的手段
+    const base = currentSite || {};
     await writeSiteSetting({ ...base, enabled: false });
     await sendToTab("stopSite");
+    return;
+  }
+  // 关之前是跟随全局 → 删掉这条键就回去了
+  if (currentSite.method === null) {
+    await writeSiteSetting(null);
     return;
   }
   await writeSiteSetting({ ...currentSite, enabled: true });

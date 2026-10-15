@@ -1,5 +1,5 @@
 {
-  "extDesc": { "message": "Automatically turns pages to your preferred light or dark — the site's own theme when it has one, else a color remap or filter. Per-site settings." },
+  "extDesc": { "message": "Flips pages to your preferred light or dark: the site's own theme when available, else a color remap or filter. Per-site settings." },
   "extName": { "message": "Light or Night" },
   "checking": { "message": "Checking..." },
   "cannotAccessPage": { "message": "Cannot access page" },

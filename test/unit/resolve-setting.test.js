@@ -37,6 +37,13 @@ test("站点关闭 → 什么都不做，哪怕全局开着", () => {
   );
 });
 
+test("站点关闭、且没自己的手段（关之前跟随全局）→ 同样什么都不做", () => {
+  assert.deepEqual(
+    MODEL.resolveSetting(G(true, true, "filter", "system"), S(false, false, null), false),
+    { action: "none", preferDark: false }
+  );
+});
+
 test("站点启用 → force（不检测），原样带上手段", () => {
   assert.deepEqual(
     MODEL.resolveSetting(G(true, true, "filter", "system"), S(true, true, "remap"), false),
@@ -73,6 +80,18 @@ test("normalizeSetting：坏值一律当没设过", () => {
     MODEL.normalizeSetting({ enabled: true, preferNative: false, method: "filter" }),
     S(true, false, "filter")
   );
+});
+
+test("normalizeSetting：站点关闭时 method 是「再打开回到哪一档」的备忘，null = 跟随全局", () => {
+  assert.deepEqual(MODEL.normalizeSetting({ enabled: false, preferNative: false, method: "remap" }), S(false, false, "remap"));
+  // 关掉时记不住手段也无所谓——这一页反正不动，记不住就当没记，再打开即跟随全局
+  assert.deepEqual(MODEL.normalizeSetting({ enabled: false, preferNative: false, method: "nope" }), S(false, false, null));
+  assert.deepEqual(MODEL.normalizeSetting({ enabled: false }), S(false, false, null));
+});
+
+test("normalizeSetting：启用时手段认不出，仍是整条当没设过", () => {
+  assert.equal(MODEL.normalizeSetting({ enabled: true, method: "nope" }), null);
+  assert.equal(MODEL.normalizeSetting({ enabled: true, method: null }), null);
 });
 
 test("normalizeSetting 不管 preference：站点级不该存这一项", () => {

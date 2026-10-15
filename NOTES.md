@@ -29,7 +29,7 @@
 
 **「跟随全局」只存在于站点级**，含义是"连要不要试原生也跟全局走"。**存储上就是该站的键不存在**；站点级「关闭」＝键存在且 `enabled: false`——两者是两回事。
 
-`chrome.storage.sync` 里存 `{ global: { enabled, preferNative, method, preference }, sites: { [host]: { enabled, preferNative, method } } }`。**认不出的值一律当没设过**（落到默认），所以不需要迁移代码。`host` = `location.host`（含端口，不含路径）。
+`chrome.storage.sync` 里存 `{ global: { enabled, preferNative, method, preference }, sites: { [host]: { enabled, preferNative, method } } }`。**站点记录的 `method` 记的是「这一站自己选的那一档」**，不是全局当时是什么：关闭态里它缺省（或不是合法手段）＝关之前选的是「跟随全局」，再打开时按它恢复。除此之外**认不出的值一律当没设过**（落到默认），所以不需要迁移代码。`host` = `location.host`（含端口，不含路径）。
 
 `preference` 的取值是 `"system" | "light" | "dark"`。**它是个加进来的字段，所以缺了不能把整条 global 判成坏值**（那样老用户存下的 `enabled/method/preferNative` 会被一起丢掉）——`normalizeSetting` 管站点那三项、`normalizeGlobal` = 那三项 + 补 `preference` 默认值，两个函数分工就在这里。
 
@@ -147,6 +147,18 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 - `chat.deepseek.com`、`e2b.dev`、`program.pinokio.computer`、`serper.dev`、`xiutaku.com`
 
 ## 决策日志
+
+### 2026-10（2.5.1）
+
+**站点开关「关→开」会把「跟随全局」静默变成一条站点级手段覆盖。** 原先跟随全局的站，关掉再打开就落到「滤镜反转」。根因在关闭那一刻的写法：`currentSite || { preferNative: 全局.preferNative, method: 全局.method }`——站上没有自己的取值时，把关掉那一刻**全局的手段实体化写进了站点记录**。而「跟随全局」在存储里的表示是**键不存在**，键一旦写下就回不去；再打开时照着记录里的 `method` 恢复，于是「跟随全局」变成了「本站用滤镜反转」。
+
+**关闭时记的是「关之前选的是哪一档」，不是全局此刻是什么。** 跟随全局就写 `{ enabled: false }`（不带 `method`）；再打开时判 `method` 缺省，删掉该键即回到跟随全局。模型随之放宽一处：`enabled: false` 时 `method` 不再是必填，认不出就当「没有自己的手段」；`enabled: true` 时仍要求合法手段，认不出整条当没设过。
+
+**排查中否掉的假设：与设置项的 DOM 顺序无关。** `setRadioGroup` 按 `data-value` 匹配，不看位置；拿改动前的 `popup.html` 做对照实验，关→开逐步逐字段**与改动后完全一致**——这是既有缺陷，不是同批的设置项重排引入的。
+
+**存量记录不自动迁移。** 老版本写坏的 `{ enabled: false, method: "filter" }` 与「本站设过滤镜反转、然后被关掉」在存储里**形状完全一致**，没有字段能区分。这条修的是"今后不再产生"，已经躺在存储里的只能手动再点一下「跟随全局」。
+
+**同一个单选组内的间距要小于跨组间距。** 全局组：偏好 → 优先尝试（单独一行）→ 手段清单；站点组：优先尝试 → 手段清单（「跟随全局」排在清单末尾）。原来「优先尝试」紧贴清单（0px），而清单里同一组的滤镜反转↔颜色映射有 4px——从属关系正好看反了。现在组内 4px、跨组 10px。
 
 ### 2026-10（2.5.0）
 

@@ -24,11 +24,19 @@ function isPreference(v) {
 // 把存储里的任意值洗成合法形状。认不出的一律返回 null，等于「没设过」——
 // 存储里遗留的字符串取值会因此落到默认，不需要迁移代码。
 // 站点级没有「偏好」这一项：偏好是全局的，站点只管「这一页是处理还是不处理、用哪个手段」。
+//
+// 站点关掉时（enabled: false）手里没有自己的手段，只剩一个备忘：「再打开时回到哪一档」。
+// method 是 null（或者干脆没这个字段，两者一样）就表示关之前选的是「跟随全局」。
+// 这里**不能**把关掉那一刻全局的取值填进来——那等于替用户给这一站设了个手段，
+// 再打开时「跟随全局」就回不去了。
 function normalizeSetting(raw) {
   if (!raw || typeof raw !== "object") return null;
   if (typeof raw.enabled !== "boolean") return null;
-  if (!isMethod(raw.method)) return null;
-  return { enabled: raw.enabled, preferNative: !!raw.preferNative, method: raw.method };
+  const method = isMethod(raw.method) ? raw.method : null;
+  // 关掉时这一页不动，手段只是备忘，认不出就当没记（回到跟随全局）
+  if (!raw.enabled) return { enabled: false, preferNative: !!raw.preferNative, method };
+  if (!method) return null;
+  return { enabled: true, preferNative: !!raw.preferNative, method };
 }
 
 // 全局 = 站点那三项 + 偏好。偏好是后加进来的字段，早先存下的 global 里没有它——

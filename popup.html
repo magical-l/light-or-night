@@ -34,8 +34,10 @@
     .settings-head .settings-title { margin-bottom: 0; }
 
     .radio-list { display: flex; flex-direction: column; gap: 4px; }
-    /* 偏好那组后面还有手段清单，拉开一点免得两组看起来是一组 */
+    /* 偏好那组后面紧随「优先尝试站点自带主题切换」那一行，拉开一点免得看起来是一组 */
     #globalPreference { margin-bottom: 10px; }
+    /* 「优先尝试…」单独一行，跟下面手段清单（组内 gap 只有 4px）拉开层次 */
+    #globalPreferNativeRow, #sitePreferNativeRow { margin-bottom: 10px; }
     .radio-row {
       display: flex; align-items: center; gap: 8px;
       padding: 6px 8px; border: 2px solid #eee8d5; border-radius: 6px;
@@ -108,11 +110,11 @@
           <label class="radio-row" data-value="light"><input type="radio" name="globalPreference" value="light"><span data-i18n="preferLight"></span></label>
           <label class="radio-row" data-value="dark"><input type="radio" name="globalPreference" value="dark"><span data-i18n="preferDark"></span></label>
         </div>
+        <label class="radio-row" id="globalPreferNativeRow"><input type="checkbox" id="globalPreferNative"><span data-i18n="preferNative"></span></label>
         <div id="globalMethods" class="radio-list">
           <label class="radio-row" data-value="filter"><input type="radio" name="globalMethod" value="filter"><span data-i18n="methodFilter"></span></label>
           <label class="radio-row" data-value="remap"><input type="radio" name="globalMethod" value="remap"><span data-i18n="methodRemap"></span></label>
         </div>
-        <label class="radio-row" id="globalPreferNativeRow"><input type="checkbox" id="globalPreferNative"><span data-i18n="preferNative"></span></label>
       </div>
     </div>
 
@@ -123,12 +125,12 @@
         <button id="siteSwitch" class="switch" type="button"></button>
       </div>
       <div id="siteOptions">
+        <label class="radio-row" id="sitePreferNativeRow"><input type="checkbox" id="sitePreferNative"><span data-i18n="preferNative"></span></label>
         <div id="siteMethods" class="radio-list">
-          <label class="radio-row" data-value="follow"><input type="radio" name="siteMethod" value="follow"><span data-i18n="followGlobal"></span></label>
           <label class="radio-row" data-value="filter"><input type="radio" name="siteMethod" value="filter"><span data-i18n="methodFilter"></span></label>
           <label class="radio-row" data-value="remap"><input type="radio" name="siteMethod" value="remap"><span data-i18n="methodRemap"></span></label>
+          <label class="radio-row" data-value="follow"><input type="radio" name="siteMethod" value="follow"><span data-i18n="followGlobal"></span></label>
         </div>
-        <label class="radio-row" id="sitePreferNativeRow"><input type="checkbox" id="sitePreferNative"><span data-i18n="preferNative"></span></label>
       </div>
     </div>
   </div>
