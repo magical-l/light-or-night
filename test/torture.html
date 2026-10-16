@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>DPIB 缺陷复现 · torture</title>
+	<title>颠倒黑白 缺陷复现 · torture</title>
 	<style>
 		/* §3：显式声明 color-scheme，考扩展是否处理 color-scheme */
 		html { color-scheme: dark; }
@@ -226,7 +226,7 @@
 </head>
 <body>
 	<div class="wrap">
-		<h1>DPIB 缺陷复现 · torture</h1>
+		<h1>颠倒黑白 缺陷复现 · torture</h1>
 		<p class="sub">单个页面，分区复现可视化缺陷。深色底 #0d0d1a。每节标题写明「在考什么」，页尾有对照清单。</p>
 
 		<!-- ===================== §1 ===================== -->
@@ -260,8 +260,8 @@
 		</div>
 
 		<h3 class="rt-h">数值化往返测试 <span class="dim">— canvas 实测 F(F(x))，看反向滤镜到底抵消了多少</span></h3>
-		<p class="note">做法：给每个测试色造一个 1×1 的 canvas 填上该色，把 <code>DPIB_FILTER</code> 连续套两次（第一次的结果画到第二个 canvas，再套一次同一个 filter）得到 <code>F(F(x))</code>，读回像素与原色逐通道比较。理想情况下图片应该原样不动，所以「期望值」这一列就是原色本身。</p>
-		<p class="note"><code>DPIB_FILTER</code> = <code>invert(100%) hue-rotate(180deg)</code> —— 这个值必须和 <code>content.js</code> 里的 <code>SOLARIZE_FILTER</code> 保持一致，否则测出来的是另一回事。</p>
+		<p class="note">做法：给每个测试色造一个 1×1 的 canvas 填上该色，把 <code>LON_FILTER</code> 连续套两次（第一次的结果画到第二个 canvas，再套一次同一个 filter）得到 <code>F(F(x))</code>，读回像素与原色逐通道比较。理想情况下图片应该原样不动，所以「期望值」这一列就是原色本身。</p>
+		<p class="note"><code>LON_FILTER</code> = <code>invert(100%) hue-rotate(180deg)</code> —— 这个值必须和 <code>content.js</code> 里的 <code>INVERT_FILTER</code> 保持一致，否则测出来的是另一回事。</p>
 		<div id="rt-warn"></div>
 		<div class="rt-scroll">
 			<table class="rt-table">
@@ -282,7 +282,7 @@
 		<p class="note"><b>结论：</b>灰阶那几行（纯黑 / 深灰 / 中灰 / 浅灰 / 纯白）偏差应当是 0，个别可能到 ±1；红、绿这类全饱和原色仍有偏差，属已知极限——中间结果超色域被浏览器钳制、钳制不可逆，无法精确还原。</p>
 
 		<!-- ===================== §2 ===================== -->
-		<h2>§2 高饱和大色块 <span class="dim">— 考 Remap 模式：鲜艳色被换成 Solarized 强调色</span></h2>
+		<h2>§2 高饱和大色块 <span class="dim">— 考 Remap 模式：带色相的色块保留原色相、收成同色相浅色块</span></h2>
 		<p class="note">6 个大色块（≥260×120）。每块里一行白字、一行黑字，块下方小字标出原始十六进制值。对比「改之前是什么、改之后变成什么」。</p>
 
 		<div class="blocks">
@@ -329,7 +329,7 @@
 		<h2>§5 渐变文字 <span class="dim">— background-clip: text</span></h2>
 		<div class="gradient-text">Gradient Heading</div>
 		<div class="gradient-text-blue">Blue-Cyan Gradient</div>
-		<p class="note">预期：渐变被抹掉，文字变成单一 Solarized 强调色（可读）。如果文字直接消失或全透明，就是失败。</p>
+		<p class="note">预期：渐变被抹掉，文字保留色相但压深到读得清（可读）。如果文字直接消失或全透明，就是失败。</p>
 
 		<!-- ===================== §6 ===================== -->
 		<h2>§6 深色伪元素 <span class="dim">— ::before / ::after</span></h2>
@@ -342,7 +342,7 @@
 		<div class="gradient-bg">暗到更暗的渐变背景，上面是浅色文字。</div>
 		<p></p>
 		<div class="gradient-bg-colorful">鲜艳的紫蓝渐变背景。</div>
-		<p class="note">预期：渐变被替换为纯 Solarized 底色（渐变信息丢失）。</p>
+		<p class="note">预期：渐变被压成一块纯色——带色相的收成同色相浅色块、中性深色落奶油底；渐变信息丢失。</p>
 
 		<div class="tall-filler">
 			<div class="mark">（占位区：撑高页面，让滚动条出现。§3 用。）</div>
@@ -357,13 +357,13 @@
 					若表格显示「本浏览器不支持 canvas filter」，说明浏览器没跑测试，不代表没有偏差，请换 Chrome / Edge。</li>
 				<li><b>§1 图片（肉眼）</b>：三张 data-URI 图各配了「原本长什么样」的说明，对照着看有没有被改坏——现在预期是基本还原成原样。<span class="bad">若明显发闷、发黄、深底变浅底，说明反向滤镜没抵消干净。</span></li>
 				<li><b>§1 小图标</b>：32×32 因 <code>&lt; 100px</code> 门槛会被跳过分类，但仍会被 counter-filter 命中 —— 说明尺寸门槛没有绕过滤镜本身。</li>
-				<li><b>§2（Remap 模式）</b>：鲜艳色块若被换成 Solarized 强调色（例如 #2962ff → 紫/蓝、#9400d3 → 品红），块里的黑/白字会被强制改成奶油色 <code>#fdf6e3</code>。
+				<li><b>§2（Remap 模式）</b>：鲜艳色块保留原色相、收成同色相的浅色块（例如 #2962ff → 浅蓝、#9400d3 → 浅紫），深色按钮变成浅底 + 深色字；中性深色（近黑、slate-900 这类）落到奶油底 <code>#fdf6e3</code>。
 					<span class="bad">若某块颜色没变（如 #00c853、#00bcd4），说明重映射的亮度阈值把它漏掉了 —— 部分色块处理、部分不处理，页面会花。</span></li>
 				<li><b>§3</b>：声明了 <code>color-scheme: dark</code>，滚动条初始应为深色。
 					<span class="bad">翻浅后滚动条仍是深色 → 扩展没处理 color-scheme，视觉不协调。</span></li>
 				<li><b>§4</b>：点击后应能持续出帧。
 					<span class="bad">若 rAF 帧率明显掉到个位数、每轮耗时飙到几十上百 ms，说明 MutationObserver 对大批 class 变动 + 自写 inline style 的处理造成了卡顿。</span></li>
-				<li><b>§5</b>：渐变文字应变成可读的单一强调色。<span class="bad">变透明/消失 = 失败。</span></li>
+				<li><b>§5</b>：渐变文字应保留色相、压深到读得清。<span class="bad">变透明/消失 = 失败。</span></li>
 				<li><b>§6</b>：::before 圆点、::after 叠加里用的是伪元素颜色，逐元素重映射拿不到。<span class="bad">保持深色、和浅色页面不协调 = 已知缺陷。</span></li>
 				<li><b>§7</b>：渐变背景应被替换为纯色。<span class="bad">若仍是渐变、或变成难看的整块色，说明渐变处理不完整。</span></li>
 			</ul>
@@ -373,8 +373,8 @@
 	<script>
 		(function () {
 			/* ---------- §1 数值化往返测试 ---------- */
-			/* DPIB_FILTER 必须和 content.js 里的 SOLARIZE_FILTER 保持一致 */
-			var DPIB_FILTER = 'invert(100%) hue-rotate(180deg)';
+			/* LON_FILTER 必须和 content.js 里的 INVERT_FILTER 保持一致 */
+			var LON_FILTER = 'invert(100%) hue-rotate(180deg)';
 			var RT_COLORS = [
 				{ name: '纯黑', hex: '#000000' },
 				{ name: '深灰', hex: '#1a1a1a' },
@@ -439,11 +439,11 @@
 				src.fillRect(0, 0, 1, 1);
 
 				var pass1 = makeCtx();
-				pass1.filter = DPIB_FILTER;
+				pass1.filter = LON_FILTER;
 				pass1.drawImage(src.canvas, 0, 0);
 
 				var pass2 = makeCtx();
-				pass2.filter = DPIB_FILTER;
+				pass2.filter = LON_FILTER;
 				pass2.drawImage(pass1.canvas, 0, 0);
 
 				var d = pass2.getImageData(0, 0, 1, 1).data;

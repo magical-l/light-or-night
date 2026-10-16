@@ -78,4 +78,4 @@ If this policy ever changes, the updated version will be published here. / 政�
 ## Contact / 联系
 
 Open an issue in the project repository:
-https://github.com/magical-l/dont-paint-it-black/issues
+https://github.com/magical-l/light-or-night/issues

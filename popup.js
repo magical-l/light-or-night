@@ -1,6 +1,4 @@
-// Light or Night / 颠倒黑白 — Popup（派生自 Marcin Kleczek 的 Don't! Paint it black，MIT）
-// Author: Marcin Kleczek <marcin.kleczek@gmail.com>
-// License: MIT
+// Light or Night / 颠倒黑白 — Popup（派生自 "Don't! Paint it Black" by Marcin Kleczek，MIT License）
 
 function t(key, subs) {
   return chrome.i18n.getMessage(key, subs);

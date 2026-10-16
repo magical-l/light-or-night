@@ -3,10 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>DPIB 缺陷复现</title>
+	<title>颠倒黑白 缺陷复现</title>
 	<script>
 		/* 本页只对应一个 case。 */
-		var DPIB_CASE = 'd-lightpage-darkmeta';
+		var LON_CASE = 'd-lightpage-darkmeta';
 
 		/* 尽早执行（先于扩展 content script 的 document_idle）：设置本 case 的页面级初始状态。
 		   raw 模式（iframe 里）与默认模式都跑同一段，保证 iframe 内外状态/渲染完全一致。 */
@@ -147,11 +147,11 @@
 		}
 		/* 安全网：滤镜模式下扩展给顶层 html 套 invert+hue-rotate，该滤镜视觉上会一并
 		   作用于其后代 iframe，导致「原样」框也被反相；滤镜自逆，给 iframe 再套一份抵消。 */
-		html.dpib-filtered .pane-frame { filter: invert(100%) hue-rotate(180deg) !important; }
+		html.lon-filtered .pane-frame { filter: invert(100%) hue-rotate(180deg) !important; }
 	</style>
 </head>
 <body>
-	<template id="dpib-chrome">
+	<template id="lon-chrome">
 		<div class="banner">
 			<div class="banner-group">判定组 · 考「深色页判定太松」</div>
 			<div class="banner-case"></div>
@@ -160,8 +160,8 @@
 			<div class="banner-hint">这一页会被扩展自动处理；左边那个框（原样）是不受扩展影响的原始状态。</div>
 		</div>
 		<div class="state">
-			<div id="dpib-state"></div>
-			<button type="button" class="state-reset" id="dpib-reset">重设快照</button>
+			<div id="lon-state"></div>
+			<button type="button" class="state-reset" id="lon-reset">重设快照</button>
 		</div>
 		<div class="heads">
 			<div class="head">原样 —— 扩展不处理这一栏</div>
@@ -175,7 +175,7 @@
 			</div>
 			<div class="pane">
 				<div class="pane-body">
-					<div class="wrap" id="dpib-scene"></div>
+					<div class="wrap" id="lon-scene"></div>
 				</div>
 			</div>
 		</div>
@@ -192,7 +192,7 @@
 				'<p><b>若判定为深色：</b>说明判定逻辑采信了 <code>meta[theme-color]</code>——那是站点给浏览器 UI 配的品牌色，不代表页面长什么样。判定只该看画布底色（<code>firstPaintedBackground</code>）。</p>' +
 				'</div>';
 
-			document.title = DPIB_CASE + ' · DPIB 缺陷复现';
+			document.title = LON_CASE + ' · 颠倒黑白 缺陷复现';
 
 			/* raw 模式：只渲染场景本身，不带说明条、不带 iframe。 */
 			if (raw) {
@@ -201,11 +201,11 @@
 			}
 
 			/* 默认模式：说明条 + 左右并排（左 iframe 原样 / 右 本页场景）。 */
-			document.body.appendChild(document.getElementById('dpib-chrome').content.cloneNode(true));
-			document.querySelector('.banner-case').textContent = DPIB_CASE;
-			document.getElementById('dpib-scene').innerHTML = SCENE;
+			document.body.appendChild(document.getElementById('lon-chrome').content.cloneNode(true));
+			document.querySelector('.banner-case').textContent = LON_CASE;
+			document.getElementById('lon-scene').innerHTML = SCENE;
 
-			var SNAP_KEY = 'dpib-snapshot:' + DPIB_CASE;
+			var SNAP_KEY = 'lon-snapshot:' + LON_CASE;
 
 			function readState() {
 				var h = document.documentElement;
@@ -240,14 +240,14 @@
 			}
 			function renderState() {
 				var now = readState();
-				document.getElementById('dpib-state').innerHTML =
+				document.getElementById('lon-state').innerHTML =
 					stateLine('加载时：', snapshot, false) +
 					stateLine('现在：', now, !sameState(snapshot, now));
 			}
 			renderState();
 
 			/* 重设快照：清掉 sessionStorage 里这条快照并 reload，重新采集当刻状态。 */
-			document.getElementById('dpib-reset').addEventListener('click', function () {
+			document.getElementById('lon-reset').addEventListener('click', function () {
 				try { sessionStorage.removeItem(SNAP_KEY); } catch (e) {}
 				location.reload();
 			});
@@ -255,7 +255,7 @@
 			/* 滤镜安全网：顶层 html 一旦被扩展套上滤镜，就给 iframe 补一份反向滤镜。 */
 			function syncFilterGuard() {
 				var f = getComputedStyle(document.documentElement).filter;
-				document.documentElement.classList.toggle('dpib-filtered', !!f && f !== 'none');
+				document.documentElement.classList.toggle('lon-filtered', !!f && f !== 'none');
 			}
 			/* 状态行与滤镜安全网按同一 tick 持续更新，跟上扩展的真实动作。 */
 			function tick() { renderState(); syncFilterGuard(); }

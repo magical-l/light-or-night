@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>DPIB 缺陷复现测试页 · 目录</title>
+	<title>颠倒黑白 缺陷复现测试页 · 目录</title>
 	<style>
 		*, *::before, *::after { box-sizing: border-box; }
 
@@ -74,7 +74,7 @@
 </head>
 <body>
 	<div class="wrap">
-		<h1>DPIB 缺陷复现测试页</h1>
+		<h1>颠倒黑白 缺陷复现测试页</h1>
 		<p class="sub">这套页面用来复现 “Light or Night / 颠倒黑白” 扩展的已知缺陷。纯静态、不联网、不引用外部资源（图片全部 data-URI 内联）。</p>
 
 		<h2>三个入口各自覆盖什么</h2>
@@ -186,7 +186,7 @@
 		<p class="legend">「应成功 / 应判对」是扩展按设计应该做对的；「应失败」是这些页面故意要暴露的缺陷——如果它反而做对了，说明缺陷已被修复。</p>
 
 		<h2>翻转模式矩阵（设置项，非静态 case）</h2>
-		<p>扩展的「翻转模式」有 6 个取值：<code>off</code> / <code>只用原生</code> / <code>只用快速滤镜</code> / <code>只用精细 Solarized</code> / <code>原生优先→滤镜</code> / <code>原生优先→精细</code>。全局有一个默认值，单个站点可以覆盖它（还有一个「跟随全局」的选项）。</p>
+		<p>扩展的「翻转模式」有 6 个取值：<code>off</code> / <code>只用原生</code> / <code>只用快速滤镜</code> / <code>只用颜色映射</code> / <code>原生优先→滤镜</code> / <code>原生优先→颜色映射</code>。全局有一个默认值，单个站点可以覆盖它（还有一个「跟随全局」的选项）。</p>
 		<p class="legend">这些是<b>设置</b>不是页面，没法做成静态 case 页。下面这张表用于手动在 popup 里切换模式、对着各 case 页逐格验证。</p>
 		<table>
 			<thead>
@@ -213,7 +213,7 @@
 					<td>上滤镜</td>
 				</tr>
 				<tr>
-					<td><code>只用精细 Solarized</code></td>
+					<td><code>只用颜色映射</code></td>
 					<td>上重映射</td>
 					<td>上重映射</td>
 				</tr>
@@ -223,7 +223,7 @@
 					<td>上滤镜</td>
 				</tr>
 				<tr>
-					<td><code>原生优先→精细</code></td>
+					<td><code>原生优先→颜色映射</code></td>
 					<td>切原生</td>
 					<td>上重映射</td>
 				</tr>

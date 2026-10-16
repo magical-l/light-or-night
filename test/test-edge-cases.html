@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#0a0a1a">
-  <title>Solarize Me — Edge Case Torture Test</title>
+  <title>Light or Night — Edge Case Torture Test</title>
   <style>
     /* ================================================================
        Dark theme base — tests page detection + basic remapping
@@ -403,9 +403,9 @@
 </head>
 <body>
   <div class="container">
-    <h1>Solarize Me — Edge Case Torture Test</h1>
+    <h1>Light or Night — Edge Case Torture Test</h1>
     <p style="color: var(--text-secondary); margin-bottom: 20px;">
-      This page exercises CSS patterns that are hard to remap. Apply Solarize Me and check each section.
+      This page exercises CSS patterns that are hard to remap. Apply Light or Night and check each section.
     </p>
 
     <!-- 1. GRADIENT TEXT -->
@@ -627,7 +627,7 @@
       <h2>Manual Verification Checklist</h2>
       <ul>
         <li>All text readable (no invisible text)</li>
-        <li>Gradient text → solid Solarized accent color</li>
+        <li>Gradient text → solid color, hue kept, darkened until readable</li>
         <li>Pseudo-elements: ::before circle, ::after overlay still dark (known limitation)</li>
         <li>CSS var() inherited colors: children may not change (known limitation)</li>
         <li>SVG dark fills remapped</li>
@@ -635,11 +635,11 @@
         <li>Hover states: buttons visually respond on hover</li>
         <li>Code block: all tokens visible (may lose syntax colors)</li>
         <li>HSL colors parsed and remapped</li>
-        <li>Gradient backgrounds replaced with solid Solarized</li>
+        <li>Gradient backgrounds flattened to one solid tone (hues kept, dark neutrals → cream)</li>
         <li>Box shadows lightened</li>
         <li>Nested containers: each level distinct</li>
         <li>Animations: may override our styles (known limitation)</li>
-        <li>Borders: remapped to Solarized palette</li>
+        <li>Borders: redrawn as a visible 1px line</li>
         <li>Form fields: readable text + placeholder</li>
         <li>Low contrast section: flagged by contrast validator</li>
         <li>Table: headers, rows, hover state</li>

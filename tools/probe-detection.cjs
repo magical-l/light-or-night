@@ -18,5 +18,5 @@ const code = "(()=>{" + src.slice(a, end + 1).join("\n") + "\n" + tail + "})()";
 process.stdout.write(JSON.stringify({
   action: "evaluate",
   args: { code },
-  session: "dpib-detect",
+  session: "lon-detect",
 }));

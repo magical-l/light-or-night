@@ -1,9 +1,6 @@
 // =============================================================================
-// Light or Night / 颠倒黑白 — Content Script（派生自 Marcin Kleczek 的 Don't! Paint it black，MIT）
+// Light or Night / 颠倒黑白 — Content Script（派生自 "Don't! Paint it Black" by Marcin Kleczek，MIT License）
 // Three-mode architecture: Native Switch → CSS Filter → DOM Remap
-//
-// Author: Marcin Kleczek <marcin.kleczek@gmail.com>
-// License: MIT
 // =============================================================================
 
 // --- 配色 ---
@@ -108,7 +105,7 @@ const OBSERVER_CONFIG = {
 // 而 sepia/saturate/brightness 任何一项都会破坏对合（这正是缺陷 ②）。
 // 注意它并非像素级精确：中间结果超出色域时会被钳制，钳制不可逆，所以全饱和原色仍有偏差。
 // 灰阶（页面的大头）偏差为 0，实测图像还原得和原图几乎一样。
-const SOLARIZE_FILTER = "invert(100%) hue-rotate(180deg)";
+const INVERT_FILTER = "invert(100%) hue-rotate(180deg)";
 
 // =============================================================================
 // COLOR UTILITIES
@@ -496,8 +493,8 @@ async function verifyBecamePreference(preferDark) {
 // 它是唯一会永久写进站点自己存储的一档，而且必须 reload 才能生效，
 // 所以：只在 DOM 层一点可切的都没有时才走；先记原值；下次加载时若页面仍未变成偏好色就写回去。
 
-const LS_TRIAL_KEY = "dpib-ls-trial";
-const LS_FAILED_KEY = "dpib-ls-failed";
+const LS_TRIAL_KEY = "lon-ls-trial";
+const LS_FAILED_KEY = "lon-ls-failed";
 
 function sessionGet(key) { try { return sessionStorage.getItem(key); } catch (e) { return null; } }
 function sessionSet(key, val) { try { sessionStorage.setItem(key, val); } catch (e) {} }
@@ -585,12 +582,12 @@ async function applyNative(isAuto) {
 // =============================================================================
 
 function applyFilterMode() {
-  if (document.getElementById("dpib-filter")) return;
+  if (document.getElementById("lon-filter")) return;
   const style = document.createElement("style");
-  style.id = "dpib-filter";
+  style.id = "lon-filter";
   style.textContent = `
     html {
-      filter: ${SOLARIZE_FILTER} !important;
+      filter: ${INVERT_FILTER} !important;
     }
     /* 媒体一律用反向滤镜还原成本来的样子：整页滤镜 + 这一层是恒等，照片/视频/canvas 永远不动。
        没有例外——「深色图也翻过来」那条例外会把照片做成负片，那是这条规则唯一不能接受的输出。
@@ -598,14 +595,14 @@ function applyFilterMode() {
     img,
     video,
     canvas {
-      filter: ${SOLARIZE_FILTER} !important;
+      filter: ${INVERT_FILTER} !important;
     }
   `;
   document.head.appendChild(style);
 }
 
 // =============================================================================
-// MODE 3: DOM REMAP (Precise Solarized)
+// MODE 3: DOM REMAP (Color remap)
 // =============================================================================
 
 // --- Remap functions ---
@@ -822,9 +819,9 @@ const REMAP_CHROME_DARK = `
   `;
 
 function injectRemapStyles(preferDark) {
-  if (document.getElementById("dpib-remap-global")) return;
+  if (document.getElementById("lon-remap-global")) return;
   const style = document.createElement("style");
-  style.id = "dpib-remap-global";
+  style.id = "lon-remap-global";
   style.textContent = preferDark ? REMAP_CHROME_DARK : REMAP_CHROME_LIGHT;
   document.head.appendChild(style);
 }

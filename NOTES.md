@@ -192,6 +192,24 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 
 ## 决策日志
 
+### 2026-10（2.5.3）
+
+**上架前把仓库里残留的上游身份标识一次清干净。** 起因是搜作者名发现"还有好几处"，查下来分三类，**只有一类真该动**：必须保留的是 MIT 版权声明本体（`LICENSE`，以及必须随副本走的许可全文）；该保留的是"上游"作为**句子主语或历史记录**出现的地方（本文件讲许可义务那段、决策日志里描述上游仓库地址和改名事件处）；真该清的是下面这些——作者名之外的邮箱、注入用户页面的标识符、上游旧产品名、上游缩写。
+
+**文件头不放个人邮箱。** 邮箱是联系方式，而这个 fork 的联系方式 2.5.2 已经定成指向项目 issue，文件头再挂上游邮箱等于给用户一个错误入口。顺带：`// Author: Marcin Kleczek <...>` 这行本来就自相矛盾——上一行刚写了"派生自…"，下一行又宣称他是这个已被大幅重写的文件的作者。三个文件头（`popup.js` / `content.js` / `popup.html`）措辞统一成 `派生自 "Don't! Paint It Black" by Marcin Kleczek，MIT License`，去掉重复的 `// License: MIT` 行。
+
+**注入用户页面的标识符也去掉了 dpib 前缀。** `content.js` 会往页面 DOM 写 `<style id="dpib-filter">` / `<style id="dpib-remap-global">`，往 sessionStorage 写 `dpib-ls-trial` / `dpib-ls-failed`——这四个是**真会出现在用户页面里**的上游缩写，改成 `lon-*`。两类风险等级不同：`LS_TRIAL_KEY` / `LS_FAILED_KEY` 是**常量名**，代码按名引用，改的只是值，构不成断链；`dpib-filter` / `dpib-remap-global` 是**裸字面量**（幂等守卫和 `style.id` 各写一遍），这两处才是必须成对改的。同理，`SOLARIZE_FILTER` 这个常量名来自上游产品名（它装的是个反转滤镜，跟 Solarized 配色无关），改成 `INVERT_FILTER`。
+
+**`docs/investigate-detection.md` 里的 `data-dpib-*` 是假信号，一并纠正。** 代码从没设过这个属性——remap 改的是站点自己的 `data-theme` / `data-color-mode`。那条排查指引换成真实存在的 `#lon-filter`。
+
+**Gecko 扩展 ID 从 `dont-paint-it-black@solarize.me` 改成 `light-or-night@magical-l.github.io`。** 旧 ID 的域名段 `solarize.me` 是上游**旧产品名 "Solarize Me"** 的域名，跟那个 `DPIB` 缩写同源。改 ID 等于发布一个新扩展（已装用户断更新），所以先确认了**从未上传过 AMO** 才动。
+
+**仓库本身也改名了：`dont-paint-it-black` → `light-or-night`。** `manifest.json` 的 `homepage_url`、`privacy-policy.md` 的联系链接、本地 git remote 三处同步。**但商店控制台的「主页网址」是手填的、不读 manifest**——那边要另外改一次，否则商店详情页上的链接还指着旧仓库名。
+
+**测试页跟着对齐，但 `Solarized` 作为配色方案名一律保留。** 12 个 `test/cases/*.html` 加 index / torture 里的 `DPIB` 缩写、`Solarize Me` 旧产品名、以及停在旧行为上的文案（"鲜艳色被换成固定的 Solarized 强调色"——那 8 个强调色 2.5.0 就弃用了，现在是保留原色相、收成同色相浅色块），统一改掉。**`Solarized` 指配色方案时（base3 / base03 / 奶油底 `#fdf6e3`）不能动**，那是 Ethan Schoonover 的公开配色方案，改了是把对的改成错的——这条边界在清理时最容易误伤。
+
+**端到端验证在真实 Edge 上跑过**（不是静态推断）。重新加载扩展后实测：滤镜模式下 `#lon-filter` 恰好注入 1 个、`html` 上 `filter: invert(1) hue-rotate(180deg)` 实际生效；颜色映射模式下 `#lon-remap-global` 同样 1 个且页面底色被真实重映射；原生切换路径把页面切到了 `data-theme="day"`；三个场景下全页 `dpib` 出现次数都是 0。
+
 ### 2026-10（2.5.2）
 
 **`activeTab` 是多余的，删掉了；`permissions` 现在只有 `["storage"]`。** 撑住 popup ↔ 内容脚本这条链路的不是它，是 `content_scripts.matches: ["<all_urls>"]`（在扩展内检页里体现为 `scriptable_hosts`，两份 manifest 都有，与 `activeTab` 无关）。`popup.js` 只取 `tab.id` 传给 `sendMessage`，**从不读 `tab.url`**，而 `chrome.tabs.query` 拿 `id` 不需要任何权限。判据、实测输出和反证都记在「商店清单怎么填」那一节。副作用：**没有 `tabs` 权限时 `query` 返回的 tab 不带 `url`**——现在不读它所以无影响，以后要读就得重新打算。

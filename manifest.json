@@ -2,14 +2,13 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_extName__",
-  "version": "2.5.2",
+  "version": "2.5.3",
   "description": "__MSG_extDesc__",
-  "author": "Marcin Kleczek <marcin.kleczek@gmail.com>",
-  "homepage_url": "https://github.com/magical-l/dont-paint-it-black",
+  "homepage_url": "https://github.com/magical-l/light-or-night",
   "permissions": ["storage"],
   "browser_specific_settings": {
     "gecko": {
-      "id": "dont-paint-it-black@solarize.me",
+      "id": "light-or-night@magical-l.github.io",
       "strict_min_version": "109.0"
     }
   },

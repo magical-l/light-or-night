@@ -3,10 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>DPIB 缺陷复现</title>
+	<title>颠倒黑白 缺陷复现</title>
 	<script>
 		/* 本页只对应一个 case。 */
-		var DPIB_CASE = 'p-palette';
+		var LON_CASE = 'p-palette';
 
 		/* 尽早执行（先于扩展 content script 的 document_idle）：清掉本 origin 上残留的主题键，
 		   避免跨 case 互相污染。本 case 的初始状态完全由 CSS 表达，脚本只做清理。 */
@@ -165,11 +165,11 @@
 		}
 		/* 安全网：滤镜模式下扩展给顶层 html 套 invert+hue-rotate，该滤镜视觉上会一并
 		   作用于其后代 iframe，导致「原样」框也被反相；滤镜自逆，给 iframe 再套一份抵消。 */
-		html.dpib-filtered .pane-frame { filter: invert(100%) hue-rotate(180deg) !important; }
+		html.lon-filtered .pane-frame { filter: invert(100%) hue-rotate(180deg) !important; }
 	</style>
 </head>
 <body>
-	<template id="dpib-chrome">
+	<template id="lon-chrome">
 		<div class="banner">
 			<div class="banner-group">判定组 · remap 模式的调色板</div>
 			<div class="banner-case"></div>
@@ -178,8 +178,8 @@
 			<div class="banner-hint">左边框是「原样」（扩展不处理 iframe）；右边是扩展处理后的真实效果。两边是同一份样张。</div>
 		</div>
 		<div class="state">
-			<div id="dpib-state"></div>
-			<button type="button" class="state-reset" id="dpib-reset">重新加载本页</button>
+			<div id="lon-state"></div>
+			<button type="button" class="state-reset" id="lon-reset">重新加载本页</button>
 		</div>
 		<div class="heads">
 			<div class="head">原样 —— 扩展不处理这一栏</div>
@@ -193,7 +193,7 @@
 			</div>
 			<div class="pane">
 				<div class="pane-body">
-					<div class="wrap" id="dpib-scene"></div>
+					<div class="wrap" id="lon-scene"></div>
 				</div>
 			</div>
 		</div>
@@ -334,7 +334,7 @@
 			/* 自检用的探针：声明色 → 当前实际算出来的颜色，直接告诉你 remap 有没有生效。 */
 			var PROBES = ['#ef4444', '#a855f7', '#0f172a', '#00c853'];
 
-			document.title = DPIB_CASE + ' · DPIB 缺陷复现';
+			document.title = LON_CASE + ' · 颠倒黑白 缺陷复现';
 
 			/* raw 模式：只渲染场景本身，不带说明条、不带 iframe。 */
 			if (raw) {
@@ -343,9 +343,9 @@
 			}
 
 			/* 默认模式：说明条 + 左右并排（左 iframe 原样 / 右 本页场景）。 */
-			document.body.appendChild(document.getElementById('dpib-chrome').content.cloneNode(true));
-			document.querySelector('.banner-case').textContent = DPIB_CASE;
-			document.getElementById('dpib-scene').innerHTML = SCENE;
+			document.body.appendChild(document.getElementById('lon-chrome').content.cloneNode(true));
+			document.querySelector('.banner-case').textContent = LON_CASE;
+			document.getElementById('lon-scene').innerHTML = SCENE;
 
 			/* 自检探针：拿几个已知原色，比对「声明的颜色」和「现在算出来的颜色」，
 			   对不上就说明 remap 生效了。这页没有 html.class / data-theme 可看（本来就没有可切的东西），
@@ -355,7 +355,7 @@
 			function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 			function renderState() {
-				var boxes = document.querySelectorAll('#dpib-scene .sw-box');
+				var boxes = document.querySelectorAll('#lon-scene .sw-box');
 				var changed = false, rows = '';
 				for (var p = 0; p < PROBES.length; p++) {
 					var idx = SW_INDEX[PROBES[p]];
@@ -375,16 +375,16 @@
 						: 'remap <b>没生效</b> —— 颜色和声明的完全一样。去 popup 看「本站模式 / 实际生效」；' +
 						  '本站大概率在 <code>sites</code> 里有一条旧覆盖值（比如「关闭」）压着全局设置。') +
 					'</div>';
-				document.getElementById('dpib-state').innerHTML = rows;
+				document.getElementById('lon-state').innerHTML = rows;
 			}
 			renderState();
 
-			document.getElementById('dpib-reset').addEventListener('click', function () { location.reload(); });
+			document.getElementById('lon-reset').addEventListener('click', function () { location.reload(); });
 
 			/* 滤镜安全网：顶层 html 一旦被扩展套上滤镜，就给 iframe 补一份反向滤镜。 */
 			function syncFilterGuard() {
 				var f = getComputedStyle(document.documentElement).filter;
-				document.documentElement.classList.toggle('dpib-filtered', !!f && f !== 'none');
+				document.documentElement.classList.toggle('lon-filtered', !!f && f !== 'none');
 			}
 			function tick() { renderState(); syncFilterGuard(); }
 			tick();

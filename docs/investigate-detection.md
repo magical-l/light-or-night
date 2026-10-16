@@ -71,7 +71,7 @@ xiutaku 这类「画布在骗人」的站（声明浅色、实际大片深色）
 
 ## 本机怎么验
 
-- **两个浏览器别混**：Kimi WebBridge（`curl http://127.0.0.1:10086`）驱动的是用户的 **Edge**，**扩展在里面**，端到端验它；Playwright MCP（`browser_connect` → `localhost:9222`）连的是**另一个 Chrome**，**没装扩展**。判扩展在不在，只看 WebBridge 通道上的页面证据（`#dpib-remap-global` / `data-dpib-*` / `documentElement.style.colorScheme`）。
+- **两个浏览器别混**：Kimi WebBridge（`curl http://127.0.0.1:10086`）驱动的是用户的 **Edge**，**扩展在里面**，端到端验它；Playwright MCP（`browser_connect` → `localhost:9222`）连的是**另一个 Chrome**，**没装扩展**。判扩展在不在，只看 WebBridge 通道上的页面证据（`#lon-remap-global` / `#lon-filter` / `documentElement.style.colorScheme`）。
 - 改完 `content.js` 要在扩展管理页点一次「**重新加载**」才生效。
 - Windows 下 WebBridge 的**请求体写成文件**再 `curl.exe` 发（中文经 shell 会被破坏）。
 - **判定是数值判断**：读 `getComputedStyle(...).backgroundColor` 和相对亮度，把**数字**贴出来，别靠肉眼看截图。
