@@ -2,11 +2,11 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_extName__",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "__MSG_extDesc__",
   "author": "Marcin Kleczek <marcin.kleczek@gmail.com>",
   "homepage_url": "https://github.com/marcinkleczek/dont-paint-it-black",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage"],
   "browser_specific_settings": {
     "gecko": {
       "id": "dont-paint-it-black@solarize.me",

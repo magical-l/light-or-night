@@ -116,6 +116,50 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 
 上架硬门槛（Chrome / Edge 都适用）：MV3 ✓ / 权限最小化 ✓ / 无远程代码 ✓ / 单用途 ✓ / **必须有实质改动**（不能原样重发别人的东西）✓。
 
+### 商店清单怎么填
+
+**类别**：Chrome 选 **Accessibility**（Make Chrome Yours 组），Edge 选 **无障碍工具**。依据：Dark Reader 在两边商店都挂这一档（Chrome 700 万用户、Edge 260 万用户），是这个品类事实上的标准位置。备选 Chrome 的「功能与界面」（DocsAfterDark 在那儿）语义更贴，但那个池子实测是杂物筐（Roblox 增强、标签管理器、新标签页混在一起），品类意图反而弱。两边都只能选一个类别。
+
+**描述是纯文本**：两个商店都不渲染 markdown —— `**` 会带着星号显示。实测 Dark Reader 在两边商店的描述都是纯段落。
+
+**描述保留换行**：编辑器里的硬折行会真的变成断行（在段中间切开）。所以文案**一个段落写一行**，有意断行的地方（比如 README 开头那三行）才留回车。
+
+**字符上限**：短描述 132；详细描述 Chrome 16,000（Edge 的下限以 Partner Center 的计数器为准）。README 里两版都远低于上限。
+
+**改清单也要过审**：Edge 的官方 API 没有 listings 端点（见 `edge-addon-publish` skill），描述只能在 Partner Center 手改，而且改完是一次新的 submission，要重新走一轮审核。
+
+### 权限理由 / 隐私做法（两个商店的表格都问这些）
+
+下面三段中英各一份，填表时直接抄。**依据是代码，不是猜测**——改权限或改数据流的时候，这一段要跟着改。
+
+**storage（存储）**
+
+- 中文：存用户自己的设置。全局一份（开关、偏好方向、要不要优先尝试站点自带的主题切换、用哪个手段），外加每个站点的例外（哪一站关掉、那一站用哪个手段）。用 `storage.sync` 是为了让同一浏览器账号下的多台机器共用这套设置。不存任何页面内容、浏览记录或个人信息。
+- English: Stores the user's own settings — one global setting (on/off, light/dark/system, whether to try the site's own theme switch, and which method) plus per-site exceptions (which sites are turned off and which method they use). `storage.sync` so the settings follow the user's browser profile across their machines. No page content, no browsing history, no personal data.
+
+**activeTab —— 已删（`permissions` 只剩 `["storage"]`）**
+
+2026-10-16 实测判定它是多余的，manifest 里去掉了。所以**这里不再需要理由**；哪天有人想加回来，先看下面这段。
+
+实测方法：Playwright 启动带扩展的 Chromium，一份 manifest 保留 `activeTab`、一份删掉，跑同一套流程（`chrome.tabs.query({active:true,currentWindow:true})` → `chrome.tabs.sendMessage(tabId, {action:"getStatus"})`）。两组 `chrome.runtime.lastError` 都是 `null`，都拿到了真实页面状态（`host: "127.0.0.1:8791"`、`pageTone: "light"`），页面也都能被正常翻转。
+
+**为什么它不是必需的**：撑起 popup ↔ 内容脚本通信的是 `content_scripts.matches: ["<all_urls>"]`——它在 `chrome-extensions-internals` 里体现为 `scriptable_hosts`，**与 `activeTab` 无关**（两份 manifest 的 `scriptable_hosts` 都是 `["<all_urls>"]`）。`popup.js` 只取 `tab.id` 传给 `sendMessage`，**从不读 `tab.url`**（站点名是内容脚本通过 `status.host` 报上来的），而 `chrome.tabs.query` 拿 `id` 不需要任何权限。
+
+一个反证：实测里把 `popup.html` 当普通标签页打开**不构成"用户手势"**，也就是那份带 `activeTab` 的副本其实**并没有真的拿到 activeTab 授权**，它照样成功——说明授权根本不在这条链路上。
+
+顺带确认：没有 `tabs` 权限时 `chrome.tabs.query` 返回的 tab 对象**不带 `url`**（两份 manifest 都一样）。现在不读它，所以无影响；**以后要是想读 `tab.url`，得另作打算**。
+
+**主机权限（`<all_urls>` / `content_scripts.matches`）**
+
+- 中文：扩展的作用就是"在任意网站上把页面翻成你偏好的明暗"，而且必须**在页面加载时就决定要不要动手**——做不到"每到一个站先点一下才生效"。所以内容脚本必须在所有网站上运行，限定域名清单等于废掉这个扩展。它只读页面的样式、类名和属性来决定要不要处理，改动只写在该页自己的 DOM 里（滤镜模式下另加一个 `style` 元素）；不碰表单、密码和 cookie，不发任何网络请求。
+- English: The extension's whole purpose is to convert any page to the user's preferred tone, and it has to decide that when the page loads — it cannot wait for the user to click something on every site. So the content script has to run on all sites; a limited host list would defeat the point. It reads only the page's styles, class names and attributes to decide whether to act, and its changes live in that page's own DOM. It does not touch forms, passwords or cookies, and makes no network requests.
+
+**远程代码：没有**
+
+包里没有 `eval`、`new Function`、`importScripts`、动态插 `<script>`，也没有 `fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon`。**代码里一个外部 URL 都没有**（grep 全仓 4 个 js 文件 + popup.html，零命中）。全部逻辑都在打包的 `model.js` / `content.js` / `popup.js` 里。
+
+**数据用途**：不收集、不使用、不传输任何用户数据。
+
 ## 怎么验证
 
 扩展是**开发者模式加载解压目录**（Edge 里 `location: 4`，路径就是本目录）。改了 `content.js` / `popup.*` / `manifest.json` / `_locales` 之后**必须去 `edge://extensions` 重新加载**。
@@ -147,6 +191,14 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 - `chat.deepseek.com`、`e2b.dev`、`program.pinokio.computer`、`serper.dev`、`xiutaku.com`
 
 ## 决策日志
+
+### 2026-10（2.5.2）
+
+**`activeTab` 是多余的，删掉了；`permissions` 现在只有 `["storage"]`。** 撑住 popup ↔ 内容脚本这条链路的不是它，是 `content_scripts.matches: ["<all_urls>"]`（在扩展内检页里体现为 `scriptable_hosts`，两份 manifest 都有，与 `activeTab` 无关）。`popup.js` 只取 `tab.id` 传给 `sendMessage`，**从不读 `tab.url`**，而 `chrome.tabs.query` 拿 `id` 不需要任何权限。判据、实测输出和反证都记在「商店清单怎么填」那一节。副作用：**没有 `tabs` 权限时 `query` 返回的 tab 不带 `url`**——现在不读它所以无影响，以后要读就得重新打算。
+
+**上架要填的东西全部归到本文件的「许可证与上架」一节，README 回归 GitHub 首页该有的样子。** README 只留项目说明 + 署名；类别、字符上限、纯文本与不折行的规矩、三类权限理由都放在这里，填表时直接抄。描述文案本身是两段平实说明加四条局限（会「骗人」的站点、自带主题识别未必准、滤镜跳过图片和视频、扩展禁区），不堆功能。
+
+**privacy-policy.md 是上游遗留的，与现在的代码三处不符，按代码重写了。** 原来写偏好存 `chrome.storage.local`（实际是 `chrome.storage.sync`）、只把深色翻浅（实际两个方向都做）、还有「分析图片像素判断深色背景」（那个功能 2.0.0 就删了；`parseColor` 里那块 canvas 是用来解析现代色彩语法的，与判断图片无关）。另补一条原来没有的披露：极少数情况下会写进站点自己的 `localStorage`（写前记原值、没生效写回、关掉该站也还回去）。署名与联系从上游作者改成项目 issue——这个 fork 的 bug 不该让用户去问他。
 
 ### 2026-10（2.5.1）
 

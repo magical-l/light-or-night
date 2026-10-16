@@ -1,49 +1,25 @@
-# Store Listing: Light or Night
+# Light or Night / 颠倒黑白
 
-## Short description (max 132 characters)
+自动把页面翻成你偏好的明暗（深色/浅色）模式。
+可以用站点自带的深色/浅色主题。没有自带主题就用滤镜或颜色映射。
+全局设置，也可以按站点特殊处理。
 
-Turns pages to the light or dark you prefer — the site's own theme, else a color remap or filter. Per-site settings.
+* 有些站点会"骗人"，设置深色/浅色的底色，然后又铺上一层浅色/深色的东西挡住，所以检测结果和看到的结果不一定相同。
+* 站点自带模式按常见的识别，未必完全准确。
+* 滤镜模式跳过图片和视频，保持图片和视频原本的样子。
+* 还有一些网站会有更复杂情况，所以如果觉得效果不好时，建议切换模式试试看。
+* 有些站点是浏览器扩展禁区，大多数扩展都不可用。比如chrome商店/edge商店。
 
-## Long description
+## English
 
-Some websites just love the dark side. Your eyes at 2 PM on a Tuesday respectfully disagree.
+Automatically flips pages to the light or dark mode you prefer.
+It can use a site's own light/dark theme. Where a site has none, it falls back to a filter or a color remap.
+Global settings, with per-site exceptions.
 
-**Light or Night** turns pages to the light or dark you prefer — **by itself**, the moment a page loads. No clicking through a menu on every site. Your preference is one setting (light, dark, or follow your system), and it applies everywhere.
+* Some sites are deceptive: they declare a dark or light background, then cover it with something of the opposite tone — so what the extension detects and what you actually see can differ.
+* When using a site's own theme, the switch is found by common patterns, so it is not always right.
+* Filter mode skips images and videos, leaving them as they are.
+* Other sites are more complicated than that. If the result does not look right, try the other mode.
+* Some sites are off-limits to browser extensions, and most extensions don't work there at all — the Chrome and Edge stores, for example.
 
-**It tries the polite way first.** If a site ships its own light or dark theme, we find the switch that site itself uses and flip it. Nothing is repainted, nothing is inverted — it is the site's own theme. That covers Tailwind-style `dark` classes, `data-theme` and `data-bs-theme` attributes, GitHub-style `data-color-mode`, namespaced class names, and anything else whose counterpart can be found in the page's own stylesheets.
-
-**If a site has no theme switch, a filter takes over.** A full-page filter flips the page, with an exactly-inverse counter-filter applied to `img`, `video` and `canvas` — so your photos, videos and canvases stay untouched, every time. (A background image set in CSS can't be spared — it flips with the page. If a site's main visual is one of those, use the color remap instead.) Toggling the filter off and on again returns every pixel to where it started.
-
-**And if a filter is not precise enough, there is a color remap.** Instead of filtering the whole page, it goes element by element: a colored surface keeps **its own hue** and is graded into a soft tint, with text on it graded to match — the blue button stays blue, it just becomes a button that fits the page. Neutral surfaces (page, cards, panels) are graded by how light or dark they originally were, so the page keeps its sense of depth. Text is pushed to WCAG AA against whatever it sits on, in both directions.
-
-**Verified, not assumed.** After switching, the extension re-measures the page and **rolls back** if the page did not actually end up in the tone you asked for — a site is never left half-converted.
-
-**Every site is yours to set.** One global default, plus a per-site override with six modes:
-
-- Off
-- Native only
-- Quick filter only
-- Color remap only
-- Native first, else quick filter *(default)*
-- Native first, else color remap
-
-**Features:**
-
-- Automatic — pages in the other tone are converted as soon as they load
-- Follows your system theme by default, or pin light / dark
-- Native-first — prefers the site's own theme, so nothing is destroyed
-- Rolls back when a switch turns out to do nothing
-- Per-site exceptions, one click
-- One-tap undo — restores the page and stops converting that site
-- English and Chinese UI, following your browser language
-- No tracking. No accounts. No remote code.
-
-**How it works:**
-
-1. Install it. It is on by default for every site, following your system theme.
-2. Visit a website in the other tone — it is already flipped.
-3. Want a different tone, or a site left alone? Open the popup.
-
-Named after the Rolling Stones classic, because some things just shouldn't be painted black.
-
-Made by Marcin Kleczek (marcin.kleczek@gmail.com). MIT License. 42 KB packaged.
+Based on "Don't! Paint it Black" by Marcin Kleczek, MIT licensed.
