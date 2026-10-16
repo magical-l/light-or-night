@@ -128,6 +128,18 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 
 **改清单也要过审**：Edge 的官方 API 没有 listings 端点（见 `edge-addon-publish` skill），描述只能在 Partner Center 手改，而且改完是一次新的 submission，要重新走一轮审核。
 
+### 发布工具与产品标识
+
+**Chrome**：`tools/release.py`（`status` / `build` / `upload` / `release`）。条目 ID `cenalkpapgjdnhiogepkmigbfngepkaj` 写在脚本里。凭据走环境变量 `CHROME_SERVICE_ACCOUNT_JSON`（**User 级**，值是服务账号 JSON 的路径）——注意 Windows 上后设的变量，**已经开着的 shell 继承不到**，得从注册表读：`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('CHROME_SERVICE_ACCOUNT_JSON','User')"`。`upload` 会拦「远端 `crxVersion` == 本地版本」，所以每次发**必须动** `manifest.json` 的 `version`，否则命令直接中止。
+
+**Edge**：官方 REST API 只能提交、**不能改商店清单**（清单只能走 Partner Center 界面）。productID 不在凭据文件里，是 Partner Center **概述页 URL 中 `microsoftedge/` 与 `/packages` 之间的 GUID**（不是 CRX ID）：
+
+| 产品 | productID | CRX ID |
+|---|---|---|
+| Light or Night | `f9b9aab9-d032-4090-b4e8-e5d073d742de` | `kdfjkonccpkhhecndjcbbfndhiejagpm` |
+
+凭据在 `~/.edge-addon-publish-credentials.json`（账号级，跨项目共用一份；`_expiry` 开工前自检）。
+
 ### 权限理由 / 隐私做法（两个商店的表格都问这些）
 
 下面三段中英各一份，填表时直接抄。**依据是代码，不是猜测**——改权限或改数据流的时候，这一段要跟着改。
