@@ -5,7 +5,7 @@
   "version": "2.5.2",
   "description": "__MSG_extDesc__",
   "author": "Marcin Kleczek <marcin.kleczek@gmail.com>",
-  "homepage_url": "https://github.com/marcinkleczek/dont-paint-it-black",
+  "homepage_url": "https://github.com/magical-l/dont-paint-it-black",
   "permissions": ["storage"],
   "browser_specific_settings": {
     "gecko": {

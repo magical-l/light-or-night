@@ -200,6 +200,8 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 
 **privacy-policy.md 是上游遗留的，与现在的代码三处不符，按代码重写了。** 原来写偏好存 `chrome.storage.local`（实际是 `chrome.storage.sync`）、只把深色翻浅（实际两个方向都做）、还有「分析图片像素判断深色背景」（那个功能 2.0.0 就删了；`parseColor` 里那块 canvas 是用来解析现代色彩语法的，与判断图片无关）。另补一条原来没有的披露：极少数情况下会写进站点自己的 `localStorage`（写前记原值、没生效写回、关掉该站也还回去）。署名与联系从上游作者改成项目 issue——这个 fork 的 bug 不该让用户去问他。
 
+**`homepage_url` 从上游仓库改成本仓库。** 原来指向 `marcinkleczek/dont-paint-it-black`——那个仓库描述的已经是**另一个产品**（停在 v1.0.0 的 "Don't! Paint it Black"）。商店详情页和清单里的「主页网址」都用它，用户顺着链接过去只会更糊涂。改成 `magical-l/dont-paint-it-black`。
+
 ### 2026-10（2.5.1）
 
 **站点开关「关→开」会把「跟随全局」静默变成一条站点级手段覆盖。** 原先跟随全局的站，关掉再打开就落到「滤镜反转」。根因在关闭那一刻的写法：`currentSite || { preferNative: 全局.preferNative, method: 全局.method }`——站上没有自己的取值时，把关掉那一刻**全局的手段实体化写进了站点记录**。而「跟随全局」在存储里的表示是**键不存在**，键一旦写下就回不去；再打开时照着记录里的 `method` 恢复，于是「跟随全局」变成了「本站用滤镜反转」。
