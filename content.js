@@ -597,6 +597,17 @@ function applyFilterMode() {
     canvas {
       filter: ${INVERT_FILTER} !important;
     }
+    /* 全屏时不能抵消：全屏元素在 top layer 渲染，html 上的整页滤镜作用不到它（实测全屏容器的
+       computed filter 就是 none），但它自己的媒体抵消滤镜照样生效，于是只剩一次反转，视频变成负片。
+       全屏的可能是媒体本身，也可能是包着媒体的容器（头条 xgplayer 全屏的是 div），两种都要覆盖。 */
+    :fullscreen img,
+    :fullscreen video,
+    :fullscreen canvas,
+    img:fullscreen,
+    video:fullscreen,
+    canvas:fullscreen {
+      filter: none !important;
+    }
   `;
   document.head.appendChild(style);
 }

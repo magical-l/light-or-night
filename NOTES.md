@@ -204,6 +204,16 @@ MIT，`Copyright (c) 2026 Marcin Kleczek <marcin.kleczek@gmail.com>`（见 `LICE
 
 ## 决策日志
 
+### 2026-11（2.5.4）
+
+**全屏时视频被反转一次，变成负片。** 根因不在「全屏后播放视频的不再是 `<video>`」：头条全屏的是 xgplayer 的容器 `div.video-slider-wrapper.xgplayer-fullscreen-parent`，video 仍在里面。根因在渲染层——`filter` 会先把元素渲染成一张独立的 surface 再整张处理，后代只有画在这张 surface 里才受影响；全屏元素进入 top layer 后被移到根 stacking context 绘制，不再画在 `html` 的 surface 内，于是 `html` 的整页滤镜作用不到它，而媒体自己的抵消滤镜照样生效，从「两次反转 = 原样」变成「一次反转 = 负片」。
+
+**实测证据（Chromium + 真实头条页）：** 全屏容器的 `getComputedStyle(...).filter` 是 `none`；受控页里全屏 div 的中心像素仍是原生 `0,0,128`，说明整页滤镜确实没有落到 top layer 上；容器内 video 的 computed filter 仍是 `invert(1) hue-rotate(180deg)`，截图为发白的负片。非全屏对照：`html` 与 video 各自都带滤镜，画面正常。
+
+**修法是全屏子树里的媒体取消抵消滤镜。** `:fullscreen img/video/canvas` 与 `img/video/canvas:fullscreen` 两组选择器都要写：全屏主体可能是媒体自己，也可能是包着媒体的容器。取舍：全屏时播放器 UI 保持站点原生深色、不再被翻浅——整页滤镜本来就作用不到 top layer，没有恢复的余地；能保证的是视频本身正常。
+
+**验证方式：** 把 `applyFilterMode()` 实际生成的样式文本注入真实头条页，点站点自己的全屏按钮，两个 computed filter 都是 `none`、视频色彩正常；非全屏下行为与改动前一致。
+
 ### 2026-10（2.5.3）
 
 **上架前把仓库里残留的上游身份标识一次清干净。** 起因是搜作者名发现"还有好几处"，查下来分三类，**只有一类真该动**：必须保留的是 MIT 版权声明本体（`LICENSE`，以及必须随副本走的许可全文）；该保留的是"上游"作为**句子主语或历史记录**出现的地方（本文件讲许可义务那段、决策日志里描述上游仓库地址和改名事件处）；真该清的是下面这些——作者名之外的邮箱、注入用户页面的标识符、上游旧产品名、上游缩写。
